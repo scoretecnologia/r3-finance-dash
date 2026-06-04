@@ -8,8 +8,8 @@ export default defineConfig({
   plugins: [
     tanstackStart({
       server: {
-        preset: "vercel",
-      },
+        preset: 'vercel'
+      }
     }),
     react(),
     tailwindcss(),
