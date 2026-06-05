@@ -13,23 +13,32 @@ const handlerCode = `
 import server from "./dist/server/server.js";
 
 export default async function(req, res) {
-  const protocol = req.headers["x-forwarded-proto"] || "https";
-  const url = new URL(req.url, \`\${protocol}://\${req.headers.host}\`);
-  
-  const webReq = new Request(url.href, {
-    method: req.method,
-    headers: req.headers,
-    body: ["GET", "HEAD"].includes(req.method) ? undefined : req,
-    duplex: "half"
-  });
+  try {
+    const protocol = req.headers["x-forwarded-proto"] || "https";
+    const host = req.headers["x-forwarded-host"] || req.headers.host || "localhost";
+    const url = new URL(req.url, \`\${protocol}://\${host}\`);
+    
+    const webReq = new Request(url.href, {
+      method: req.method,
+      headers: req.headers,
+      body: ["GET", "HEAD"].includes(req.method) ? undefined : JSON.stringify(req.body || {}),
+    });
 
-  const webRes = await server.fetch(webReq);
-  
-  webRes.headers.forEach((v, k) => res.setHeader(k, v));
-  res.status(webRes.status);
-  
-  const buffer = await webRes.arrayBuffer();
-  res.send(Buffer.from(buffer));
+    const webRes = await server.fetch(webReq);
+    
+    webRes.headers.forEach((v, k) => res.setHeader(k, v));
+    res.status(webRes.status);
+    
+    const buffer = await webRes.arrayBuffer();
+    res.send(Buffer.from(buffer));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ 
+      error: "FUNCTION_INVOCATION_FAILED (Custom Wrapper)", 
+      message: error.message, 
+      stack: error.stack 
+    });
+  }
 }
 `;
 
