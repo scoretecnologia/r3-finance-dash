@@ -3,12 +3,17 @@ import react from "@vitejs/plugin-react";
 import tsconfigPaths from "vite-tsconfig-paths";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import { nitro } from "nitro/vite";
 
-export default defineConfig(({ command }) => ({
+export default defineConfig(() => ({
   plugins: [
-    tanstackStart({
-      server: {
-        preset: "vercel",
+    tanstackStart(),
+    nitro({
+      preset: "vercel",
+      output: {
+        dir: ".vercel/output",
+        serverDir: ".vercel/output/functions/__server.func",
+        publicDir: ".vercel/output/static",
       },
     }),
     react(),
@@ -19,5 +24,4 @@ export default defineConfig(({ command }) => ({
     host: "::",
     port: 8080,
   },
-  ssr: command === "build" ? { noExternal: true } : undefined,
 }));
