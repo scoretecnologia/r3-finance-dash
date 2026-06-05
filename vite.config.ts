@@ -19,4 +19,7 @@ export default defineConfig({
     host: "::",
     port: 8080,
   },
+  ssr: {
+    noExternal: true,
+  },
 });
