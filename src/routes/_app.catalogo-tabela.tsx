@@ -40,8 +40,6 @@ import type { ColumnDef, SortingState, ColumnFiltersState } from "@tanstack/reac
 import { cn } from "@/lib/utils";
 
 // Parquet & Arrow imports
-import * as wasm from "parquet-wasm";
-import wasmUrl from "parquet-wasm/esm/parquet_wasm_bg.wasm?url";
 import { tableFromIPC } from "apache-arrow";
 
 // Excel Export
@@ -221,12 +219,18 @@ function CatalogoTabelaPage() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
+  
+  // Wasm module state
+  const [wasmModule, setWasmModule] = useState<any>(null);
 
   useEffect(() => {
     // Initialize WASM
     async function setupWasm() {
       try {
+        const wasm = await import("parquet-wasm");
+        const wasmUrl = (await import("parquet-wasm/esm/parquet_wasm_bg.wasm?url")).default;
         await wasm.default(wasmUrl);
+        setWasmModule(wasm);
         setIsWasmReady(true);
       } catch (e) {
         console.error("Failed to init wasm", e);
@@ -297,7 +301,8 @@ function CatalogoTabelaPage() {
             const wasmBytes = new Uint8Array(arrayBuffer);
             
             // read parquet to Arrow IPC
-            const wasmTable = wasm.readParquet(wasmBytes);
+            if (!wasmModule) throw new Error('WASM module not initialized');
+            const wasmTable = wasmModule.readParquet(wasmBytes);
             const ipcBuffer = wasmTable.intoIPCStream();
             // read Arrow IPC to Arrow Table
             const arrowTable = tableFromIPC(ipcBuffer);
