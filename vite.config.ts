@@ -4,6 +4,7 @@ import tsconfigPaths from "vite-tsconfig-paths";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import { nitro } from "nitro/vite";
+import wasm from "vite-plugin-wasm";
 
 export default defineConfig(() => ({
   plugins: [
@@ -19,7 +20,11 @@ export default defineConfig(() => ({
     react(),
     tailwindcss(),
     tsconfigPaths(),
+    wasm(),
   ],
+  build: {
+    target: "esnext",
+  },
   server: {
     host: "::",
     port: 8080,

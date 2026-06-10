@@ -227,9 +227,9 @@ function CatalogoTabelaPage() {
     // Initialize WASM
     async function setupWasm() {
       try {
-        const wasm = await import("parquet-wasm");
-        const wasmUrl = (await import("parquet-wasm/esm/parquet_wasm_bg.wasm?url")).default;
-        await wasm.default(wasmUrl);
+        // Com o vite-plugin-wasm, podemos importar a versão bundler
+        // que resolve o .wasm internamente de forma automática
+        const wasm = await import("parquet-wasm/bundler");
         setWasmModule(wasm);
         setIsWasmReady(true);
       } catch (e) {
@@ -424,6 +424,11 @@ function CatalogoTabelaPage() {
           val = `${d}/${m}/${y}`;
         } else if (val instanceof Date) {
           val = val.toLocaleDateString('pt-BR');
+        } else if (typeof val === 'bigint') {
+          // XLSX library often ignores BigInts or serializes them incorrectly
+          val = val.toString();
+        } else if (val !== null && val !== undefined && typeof val === 'object') {
+          val = JSON.stringify(val);
         }
         
         // Se for número, o próprio excel lida bem com type number se não formatarmos pra string!
