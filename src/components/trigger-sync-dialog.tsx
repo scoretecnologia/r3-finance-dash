@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { Link } from "@tanstack/react-router";
 import { format, parse, setYear, setMonth, addYears, subYears } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -13,6 +14,7 @@ import {
   Sparkles,
   CheckCircle2,
   AlertTriangle,
+  Terminal,
 } from "lucide-react";
 import {
   Dialog,
@@ -291,11 +293,21 @@ export function TriggerSyncDialog({
 
           {/* Feedback de Sucesso */}
           {success && (
-            <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-medium animate-fade-in">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-              <span>
-                Fluxo disparado com sucesso! O Kestra já iniciou a extração dos dados.
-              </span>
+            <div className="space-y-2 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-medium animate-fade-in">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <span>Fluxo disparado com sucesso! O Kestra já iniciou a extração.</span>
+              </div>
+              <div className="pt-1">
+                <Link
+                  to="/logs"
+                  onClick={() => onOpenChange(false)}
+                  className="inline-flex items-center gap-1.5 font-bold text-emerald-700 dark:text-emerald-300 underline underline-offset-4 hover:opacity-80"
+                >
+                  <Terminal className="h-3.5 w-3.5" />
+                  Acompanhar Console na aba de Logs &rarr;
+                </Link>
+              </div>
             </div>
           )}
         </div>
