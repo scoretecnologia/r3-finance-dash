@@ -1,11 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/external";
 import { toast } from "sonner";
 import {
   ChevronDown, Plus, Store, MapPin, Search, Loader2,
-  ChevronLeft, ChevronRight, Calendar as CalendarIcon, Zap, Database, Play,
+  ChevronLeft, ChevronRight, Calendar as CalendarIcon, Zap, Database, Play, Pencil,
 } from "lucide-react";
 import { TriggerSyncDialog } from "@/components/trigger-sync-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -65,6 +65,11 @@ function ConfiguracoesPage() {
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [syncServidorId, setSyncServidorId] = useState<number | null>(null);
   const [syncCidadeId, setSyncCidadeId] = useState<number | null>(null);
+  const [editTarget, setEditTarget] = useState<{
+    type: "servidor" | "subloja";
+    id: number;
+    currentNome: string;
+  } | null>(null);
 
   const servidoresQ = useQuery({
     queryKey: ["servidores"],
@@ -310,6 +315,21 @@ function ConfiguracoesPage() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-sm truncate">{srv.nome}</span>
+                        <button
+                          type="button"
+                          title="Editar nome da loja"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditTarget({
+                              type: "servidor",
+                              id: srv.servidor_id,
+                              currentNome: srv.nome,
+                            });
+                          }}
+                          className="h-6 w-6 inline-flex items-center justify-center rounded-md text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
                         <Badge
                           variant="secondary"
                           className="font-mono text-[10px] rounded-md bg-muted/80 border-0"
@@ -377,6 +397,21 @@ function ConfiguracoesPage() {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-sm font-medium truncate">{sl.nome}</span>
+                                <button
+                                  type="button"
+                                  title="Editar nome da subloja"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditTarget({
+                                      type: "subloja",
+                                      id: sl.cidade_id,
+                                      currentNome: sl.nome,
+                                    });
+                                  }}
+                                  className="h-6 w-6 inline-flex items-center justify-center rounded-md text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </button>
                                 <Badge
                                   variant="secondary"
                                   className="font-mono text-[10px] rounded-md bg-muted/80 border-0"
@@ -423,6 +458,17 @@ function ConfiguracoesPage() {
         sublojas={sublojasQ.data ?? []}
         initialServidorId={syncServidorId}
         initialCidadeId={syncCidadeId}
+      />
+      <EditarNomeDialog
+        target={editTarget}
+        onClose={() => setEditTarget(null)}
+        onSave={(id, newNome, type) => {
+          if (type === "servidor") {
+            updateServidor.mutate({ id, patch: { nome: newNome } });
+          } else {
+            updateSubloja.mutate({ id, patch: { nome: newNome } });
+          }
+        }}
       />
     </div>
   );
@@ -673,5 +719,93 @@ function MonthPicker({ value, disabled, onChange }: {
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+function EditarNomeDialog({
+  target,
+  onClose,
+  onSave,
+}: {
+  target: { type: "servidor" | "subloja"; id: number; currentNome: string } | null;
+  onClose: () => void;
+  onSave: (id: number, newNome: string, type: "servidor" | "subloja") => void;
+}) {
+  const [nome, setNome] = useState("");
+
+  useEffect(() => {
+    if (target) {
+      setNome(target.currentNome);
+    }
+  }, [target]);
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!target) return;
+    const trimmed = nome.trim();
+    if (!trimmed) {
+      toast.error("O nome não pode ficar vazio");
+      return;
+    }
+    onSave(target.id, trimmed, target.type);
+    onClose();
+  };
+
+  if (!target) return null;
+
+  const isServidor = target.type === "servidor";
+
+  return (
+    <Dialog open={Boolean(target)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-[420px] rounded-2xl border-border/40 shadow-xl p-6">
+        <form onSubmit={handleSubmit}>
+          <DialogHeader className="space-y-1.5 mb-4">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Pencil className="h-4 w-4" />
+              </div>
+              <DialogTitle className="text-base font-bold">
+                {isServidor ? "Editar Nome da Loja Matriz" : "Editar Nome da Subloja"}
+              </DialogTitle>
+            </div>
+            <DialogDescription className="text-xs">
+              Altere o nome de exibição para a {isServidor ? "loja" : "subloja"} #{target.id}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-nome" className="text-xs font-medium">Nome</Label>
+              <Input
+                id="edit-nome"
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder="Digite o novo nome..."
+                className="h-10 rounded-xl bg-card border-border/50 text-sm"
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="mt-5 gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="rounded-xl h-9 text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              disabled={!nome.trim() || nome.trim() === target.currentNome}
+              className="rounded-xl h-9 text-xs font-semibold"
+            >
+              Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
