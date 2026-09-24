@@ -5,8 +5,9 @@ import { supabase } from "@/integrations/supabase/external";
 import { toast } from "sonner";
 import {
   ChevronDown, Plus, Store, MapPin, Search, Loader2,
-  ChevronLeft, ChevronRight, Calendar as CalendarIcon, Zap, Database,
+  ChevronLeft, ChevronRight, Calendar as CalendarIcon, Zap, Database, Play,
 } from "lucide-react";
+import { TriggerSyncDialog } from "@/components/trigger-sync-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format, parse, setYear, setMonth, addYears, subYears } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -61,6 +62,9 @@ function ConfiguracoesPage() {
   const [statusFilter, setStatusFilter] = useState<"todas" | "ativas" | "inativas">("todas");
   const [newLojaOpen, setNewLojaOpen] = useState(false);
   const [newSublojaOpen, setNewSublojaOpen] = useState(false);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [syncServidorId, setSyncServidorId] = useState<number | null>(null);
+  const [syncCidadeId, setSyncCidadeId] = useState<number | null>(null);
 
   const servidoresQ = useQuery({
     queryKey: ["servidores"],
@@ -183,7 +187,18 @@ function ConfiguracoesPage() {
             Gerencie os parâmetros das Lojas Matrizes e suas Sublojas.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={() => {
+              setSyncServidorId(null);
+              setSyncCidadeId(null);
+              setSyncDialogOpen(true);
+            }}
+            className="rounded-xl h-9 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 gap-1.5 transition-all"
+          >
+            <Play className="h-3.5 w-3.5 fill-current" />
+            Executar Sincronização
+          </Button>
           <Button
             variant="outline"
             onClick={() => setNewSublojaOpen(true)}
@@ -327,6 +342,11 @@ function ConfiguracoesPage() {
                     onChange={(patch) =>
                       updateServidor.mutate({ id: srv.servidor_id, patch })
                     }
+                    onExecute={() => {
+                      setSyncServidorId(srv.servidor_id);
+                      setSyncCidadeId(null);
+                      setSyncDialogOpen(true);
+                    }}
                   />
                 </div>
 
@@ -373,6 +393,11 @@ function ConfiguracoesPage() {
                             onChange={(patch) =>
                               updateSubloja.mutate({ id: sl.cidade_id, patch })
                             }
+                            onExecute={() => {
+                              setSyncServidorId(sl.servidor_id);
+                              setSyncCidadeId(sl.cidade_id);
+                              setSyncDialogOpen(true);
+                            }}
                           />
                         </div>
                       ))
@@ -391,17 +416,26 @@ function ConfiguracoesPage() {
         onOpenChange={setNewSublojaOpen}
         servidores={servidoresQ.data ?? []}
       />
+      <TriggerSyncDialog
+        open={syncDialogOpen}
+        onOpenChange={setSyncDialogOpen}
+        servidores={servidoresQ.data ?? []}
+        sublojas={sublojasQ.data ?? []}
+        initialServidorId={syncServidorId}
+        initialCidadeId={syncCidadeId}
+      />
     </div>
   );
 }
 
 function RowControls({
-  ativo, cargaCompleta, mes, onChange,
+  ativo, cargaCompleta, mes, onChange, onExecute,
 }: {
   ativo: boolean;
   cargaCompleta: boolean;
   mes: string;
   onChange: (p: { ativo?: boolean; carga_completa?: boolean; mes_referencia?: string }) => void;
+  onExecute?: () => void;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-4 lg:gap-5">
@@ -427,6 +461,18 @@ function RowControls({
         </Select>
       </div>
       <MonthPicker value={mes} disabled={cargaCompleta} onChange={(val) => onChange({ mes_referencia: val })} />
+      {onExecute && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onExecute}
+          className="h-8 px-2.5 rounded-lg text-xs font-semibold text-emerald-600 hover:text-emerald-700 border-emerald-500/30 hover:border-emerald-500/60 bg-emerald-50/50 dark:bg-emerald-950/20 hover:bg-emerald-100/50 gap-1.5 transition-all shadow-xs"
+          title="Executar sincronização para esta loja"
+        >
+          <Play className="h-3 w-3 fill-current" />
+          Executar
+        </Button>
+      )}
     </div>
   );
 }
