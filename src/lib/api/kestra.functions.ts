@@ -65,7 +65,7 @@ function getKestraConfig() {
 
   const token = process.env.KESTRA_API_TOKEN;
   const basicAuth =
-    process.env.KESTRA_BASIC_AUTH || "scorecontabilidade7@gmail.com:ScoreTech@2026#";
+    process.env.KESTRA_BASIC_AUTH || "dev@ddinsights.com.br:Luk@$123";
 
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
