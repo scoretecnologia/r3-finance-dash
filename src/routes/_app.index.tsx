@@ -93,6 +93,14 @@ function extractYearStr(dateStr?: string | null): string | null {
   return null;
 }
 
+function exportToXLSX(data: Record<string, unknown>[], filename: string) {
+  if (!data || data.length === 0) return;
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Detalhamento");
+  XLSX.writeFile(workbook, `${filename}.xlsx`);
+}
+
 function formatDateDisplay(dateStr?: string | null): string {
   if (!dateStr) return "—";
   try {
@@ -199,16 +207,14 @@ function DashboardPage() {
   }, [faturamentoQ.data, dreQ.data]);
 
   // Filtros Globais
-  const [selectedYear, setSelectedYear] = useState<string>("2025");
+  const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
   const [selectedMonth, setSelectedMonth] = useState<string>("todos");
   const [selectedServidor, setSelectedServidor] = useState<string>("todos");
   const [selectedCidade, setSelectedCidade] = useState<string>("todas");
   const [dreSearch, setDreSearch] = useState<string>("");
 
-  // Expansão de Categorias na DRE
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set(["Despesas Fixas", "Despesas Variáveis"])
-  );
+  // Expansão de Categorias na DRE (todas recolhidas por padrão)
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
   // Estado do Modal de Detalhamento da Célula DRE
   const [selectedCellDetail, setSelectedCellDetail] = useState<CellDetailState | null>(null);
@@ -957,11 +963,6 @@ function DashboardPage() {
                       Empresa: r.dados_extra?.empresa || "",
                       Data: formatDateDisplay(r.dados_extra?.data),
                     }));
-                    XLSX.utils.book_append_sheet(
-                      XLSX.utils.book_new(),
-                      XLSX.utils.json_to_sheet(exportRows),
-                      "Detalhamento"
-                    );
                     exportToXLSX(
                       exportRows,
                       `Detalhamento_${selectedCellDetail.accountCode}_${selectedCellDetail.monthLabel}`
