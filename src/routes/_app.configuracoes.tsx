@@ -5,8 +5,10 @@ import { supabase } from "@/integrations/supabase/external";
 import { toast } from "sonner";
 import {
   ChevronDown, Plus, Store, MapPin, Search, Loader2,
-  ChevronLeft, ChevronRight, Calendar as CalendarIcon, Zap, Database, Play, Pencil,
+  ChevronLeft, ChevronRight, Calendar as CalendarIcon, Zap, Database, Play, Pencil, Layers,
 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PlanoContasTab } from "@/components/plano-contas-tab";
 import { TriggerSyncDialog } from "@/components/trigger-sync-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format, parse, setYear, setMonth, addYears, subYears } from "date-fns";
@@ -179,46 +181,67 @@ function ConfiguracoesPage() {
 
   return (
     <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto animate-fade-in">
-      {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-              <Database className="h-4 w-4 text-primary" />
+      <Tabs defaultValue="lojas" className="space-y-6">
+        {/* Page header with tabs navigation */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-border/40">
+          <div>
+            <div className="flex items-center gap-2.5 mb-1">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                <Database className="h-4 w-4 text-primary" />
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight">Configurações do Sistema</h1>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">Configurações de Extração</h1>
+            <p className="text-sm text-muted-foreground ml-[42px]">
+              Gerencie os parâmetros de sincronização das lojas e o plano de contas gerencial da DRE.
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground ml-[42px]">
-            Gerencie os parâmetros das Lojas Matrizes e suas Sublojas.
-          </p>
+
+          <TabsList className="bg-muted/80 p-1 rounded-xl h-11 border border-border/40 self-start md:self-auto shrink-0">
+            <TabsTrigger
+              value="lojas"
+              className="rounded-lg text-xs font-semibold px-4 py-2 gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+            >
+              <Store className="h-3.5 w-3.5 text-primary" />
+              <span>Lojas & Escopo</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="plano_contas"
+              className="rounded-lg text-xs font-semibold px-4 py-2 gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+            >
+              <Layers className="h-3.5 w-3.5 text-primary" />
+              <span>Plano de Contas (De-Para)</span>
+            </TabsTrigger>
+          </TabsList>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            onClick={() => {
-              setSyncServidorId(null);
-              setSyncCidadeId(null);
-              setSyncDialogOpen(true);
-            }}
-            className="rounded-xl h-9 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 gap-1.5 transition-all"
-          >
-            <Play className="h-3.5 w-3.5 fill-current" />
-            Executar Sincronização
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setNewSublojaOpen(true)}
-            className="rounded-xl h-9 text-xs font-medium border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all"
-          >
-            <Plus className="h-3.5 w-3.5" /> Nova Subloja
-          </Button>
-          <Button
-            onClick={() => setNewLojaOpen(true)}
-            className="rounded-xl h-9 text-xs font-medium hover:shadow-lg hover:shadow-primary/20 transition-all"
-          >
-            <Plus className="h-3.5 w-3.5" /> Nova Loja
-          </Button>
-        </div>
-      </div>
+
+        {/* TAB 1: LOJAS & ESCOPO */}
+        <TabsContent value="lojas" className="space-y-6 mt-0 focus-visible:outline-none">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              onClick={() => {
+                setSyncServidorId(null);
+                setSyncCidadeId(null);
+                setSyncDialogOpen(true);
+              }}
+              className="rounded-xl h-9 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 gap-1.5 transition-all"
+            >
+              <Play className="h-3.5 w-3.5 fill-current" />
+              Executar Sincronização
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setNewSublojaOpen(true)}
+              className="rounded-xl h-9 text-xs font-medium border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all"
+            >
+              <Plus className="h-3.5 w-3.5" /> Nova Subloja
+            </Button>
+            <Button
+              onClick={() => setNewLojaOpen(true)}
+              className="rounded-xl h-9 text-xs font-medium hover:shadow-lg hover:shadow-primary/20 transition-all"
+            >
+              <Plus className="h-3.5 w-3.5" /> Nova Loja
+            </Button>
+          </div>
 
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3">
@@ -444,6 +467,13 @@ function ConfiguracoesPage() {
           })
         )}
       </div>
+    </TabsContent>
+
+    {/* TAB 2: PLANO DE CONTAS DE-PARA */}
+        <TabsContent value="plano_contas" className="mt-0 focus-visible:outline-none">
+          <PlanoContasTab />
+        </TabsContent>
+      </Tabs>
 
       <NovaLojaDialog open={newLojaOpen} onOpenChange={setNewLojaOpen} />
       <NovaSublojaDialog
