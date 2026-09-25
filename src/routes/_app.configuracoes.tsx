@@ -5,10 +5,11 @@ import { supabase } from "@/integrations/supabase/external";
 import { toast } from "sonner";
 import {
   ChevronDown, Plus, Store, MapPin, Search, Loader2,
-  ChevronLeft, ChevronRight, Calendar as CalendarIcon, Zap, Database, Play, Pencil, Layers,
+  ChevronLeft, ChevronRight, Calendar as CalendarIcon, Zap, Database, Play, Pencil, Layers, Users,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PlanoContasTab } from "@/components/plano-contas-tab";
+import { ParceirosTab } from "@/components/parceiros-tab";
 import { TriggerSyncDialog } from "@/components/trigger-sync-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format, parse, setYear, setMonth, addYears, subYears } from "date-fns";
@@ -210,6 +211,13 @@ function ConfiguracoesPage() {
             >
               <Layers className="h-3.5 w-3.5 text-primary" />
               <span>Plano de Contas (De-Para)</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="parceiros"
+              className="rounded-lg text-xs font-semibold px-4 py-2 gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+            >
+              <Users className="h-3.5 w-3.5 text-primary" />
+              <span>Comissões Parceiros</span>
             </TabsTrigger>
           </TabsList>
         </div>
@@ -472,6 +480,11 @@ function ConfiguracoesPage() {
     {/* TAB 2: PLANO DE CONTAS DE-PARA */}
         <TabsContent value="plano_contas" className="mt-0 focus-visible:outline-none">
           <PlanoContasTab />
+        </TabsContent>
+
+    {/* TAB 3: COMISSÕES PARCEIROS */}
+        <TabsContent value="parceiros" className="mt-0 focus-visible:outline-none">
+          <ParceirosTab />
         </TabsContent>
       </Tabs>
 
