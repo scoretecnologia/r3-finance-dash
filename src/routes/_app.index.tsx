@@ -31,6 +31,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { MultiSelectFilter } from "@/components/multi-select-filter";
 import {
   Select,
   SelectContent,
@@ -226,6 +227,59 @@ const MANAGERIAL_GROUPS: ManagerialGroupDef[] = [
   },
 ];
 
+interface ParceiroRegra {
+  id: number;
+  parceiro_nome: string;
+  servidor_id?: number | null;
+  servidor_nome?: string | null;
+  cidade_id?: number | null;
+  cidade_nome?: string | null;
+  percentual_comissao: number;
+  observacao?: string | null;
+  ativo: boolean;
+}
+
+function getRuleForStore(
+  store: { id_servidor?: number | string | null; id_cidade?: number | string | null; loja?: string | null; cidade?: string | null },
+  rules: ParceiroRegra[]
+): ParceiroRegra | null {
+  if (!rules || rules.length === 0) return null;
+
+  // 1. Prioridade máxima: correspondência por cidade_id (Subloja / Filial específica)
+  if (store.id_cidade) {
+    const match = rules.find((r) => r.cidade_id && String(r.cidade_id) === String(store.id_cidade));
+    if (match) return match;
+  }
+
+  // 2. Correspondência por nome da subloja/cidade (se informada e diferente de 'Matriz')
+  if (store.cidade && store.cidade.trim().toLowerCase() !== "matriz") {
+    const cidNorm = store.cidade.trim().toLowerCase();
+    const match = rules.find(
+      (r) => r.cidade_nome && r.cidade_nome.trim().toLowerCase() === cidNorm
+    );
+    if (match) return match;
+  }
+
+  // 3. Correspondência por servidor_id da Matriz (regra onde cidade_id é nulo)
+  if (store.id_servidor) {
+    const match = rules.find(
+      (r) => !r.cidade_id && String(r.servidor_id) === String(store.id_servidor)
+    );
+    if (match) return match;
+  }
+
+  // 4. Correspondência por nome da Matriz/Loja (regra onde cidade_id é nulo)
+  if (store.loja) {
+    const lojaNorm = store.loja.trim().toLowerCase();
+    const match = rules.find(
+      (r) => !r.cidade_id && r.servidor_nome && r.servidor_nome.trim().toLowerCase() === lojaNorm
+    );
+    if (match) return match;
+  }
+
+  return null;
+}
+
 function DashboardPage() {
   // Queries Supabase
   const servidoresQ = useQuery({
@@ -264,7 +318,29 @@ function DashboardPage() {
     },
   });
 
-  const isLoading = faturamentoQ.isLoading || dreQ.isLoading;
+  const parceirosRegrasQ = useQuery({
+    queryKey: ["parceiros-regras-dre"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("grupo_r3_parceiros_regras" as never)
+        .select("*")
+        .eq("ativo", true);
+      if (error) throw error;
+      return (data || []) as Array<{
+        id: number;
+        parceiro_nome: string;
+        servidor_id?: number | null;
+        servidor_nome?: string | null;
+        cidade_id?: number | null;
+        cidade_nome?: string | null;
+        percentual_comissao: number;
+        observacao?: string | null;
+        ativo: boolean;
+      }>;
+    },
+  });
+
+  const isLoading = faturamentoQ.isLoading || dreQ.isLoading || parceirosRegrasQ.isLoading;
 
   // Anos disponíveis nos dados
   const availableYears = useMemo(() => {
@@ -283,9 +359,10 @@ function DashboardPage() {
 
   // Filtros Globais
   const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
-  const [selectedMonth, setSelectedMonth] = useState<string>("todos");
-  const [selectedServidor, setSelectedServidor] = useState<string>("todos");
-  const [selectedCidade, setSelectedCidade] = useState<string>("todas");
+  // Listas vazias significam "todos"
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+  const [selectedServidores, setSelectedServidores] = useState<string[]>([]);
+  const [selectedCidades, setSelectedCidades] = useState<string[]>([]);
   const [dreSearch, setDreSearch] = useState<string>("");
   const [naturezaFilter, setNaturezaFilter] = useState<"todas" | "fixas" | "variaveis">("todas");
 
@@ -312,21 +389,64 @@ function DashboardPage() {
     setExpandedGroups(new Set());
   };
 
-  // Filiais filtradas pela matriz selecionada
+  // Filiais filtradas pelas matrizes selecionadas
   const filteredSublojas = useMemo(() => {
-    if (selectedServidor === "todos") return sublojasQ.data ?? [];
-    return (sublojasQ.data ?? []).filter((s) => String(s.servidor_id) === selectedServidor);
-  }, [sublojasQ.data, selectedServidor]);
+    if (selectedServidores.length === 0) return sublojasQ.data ?? [];
+    const set = new Set(selectedServidores);
+    return (sublojasQ.data ?? []).filter((s) => set.has(String(s.servidor_id)));
+  }, [sublojasQ.data, selectedServidores]);
 
-  // Nome da loja / cidade selecionada para exibição no card de Apuração
+  // Ao mudar as matrizes, mantém apenas as filiais que ainda pertencem à seleção
+  const handleServidoresChange = (values: string[]) => {
+    setSelectedServidores(values);
+    if (values.length === 0) return;
+    const allowed = new Set(
+      (sublojasQ.data ?? [])
+        .filter((s) => values.includes(String(s.servidor_id)))
+        .map((s) => String(s.cidade_id))
+    );
+    setSelectedCidades((prev) => prev.filter((c) => allowed.has(c)));
+  };
+
+  const servidorOptions = useMemo(
+    () =>
+      (servidoresQ.data ?? []).map((s) => ({
+        value: String(s.servidor_id),
+        label: s.nome || `Servidor ${s.servidor_id}`,
+      })),
+    [servidoresQ.data]
+  );
+  const sublojaOptions = useMemo(
+    () => filteredSublojas.map((s) => ({ value: String(s.cidade_id), label: s.nome || `Cidade ${s.cidade_id}` })),
+    [filteredSublojas]
+  );
+  const monthOptions = useMemo(() => MONTH_LABELS.map((m) => ({ value: m.key, label: m.full })), []);
+
+  // Meses visíveis na DRE (respeita o filtro de meses)
+  const visibleMonthLabels = useMemo(
+    () => (selectedMonths.length === 0 ? MONTH_LABELS : MONTH_LABELS.filter((m) => selectedMonths.includes(m.key))),
+    [selectedMonths]
+  );
+  const visibleMonthKeys = useMemo(() => visibleMonthLabels.map((m) => m.key), [visibleMonthLabels]);
+  const hasMonthFilter = selectedMonths.length > 0;
+  const totalColumnLabel = hasMonthFilter ? "Total Período" : "Total Ano";
+
+  // Nome das lojas / cidades selecionadas para exibição no card de Apuração
   const selectedScopeLabel = useMemo(() => {
-    if (selectedServidor === "todos") return "Todas as Lojas (Consolidado Grupo R3)";
-    const srv = (servidoresQ.data ?? []).find((s) => String(s.servidor_id) === selectedServidor);
-    const srvNome = srv?.nome || `Servidor ${selectedServidor}`;
-    if (selectedCidade === "todas") return srvNome;
-    const sub = (sublojasQ.data ?? []).find((s) => String(s.cidade_id) === selectedCidade);
-    return `${srvNome} — ${sub?.nome || `Cidade ${selectedCidade}`}`;
-  }, [selectedServidor, selectedCidade, servidoresQ.data, sublojasQ.data]);
+    const srvNames = selectedServidores.map((id) => {
+      const srv = (servidoresQ.data ?? []).find((s) => String(s.servidor_id) === id);
+      return srv?.nome || `Servidor ${id}`;
+    });
+    const cidNames = selectedCidades.map((id) => {
+      const sub = (sublojasQ.data ?? []).find((s) => String(s.cidade_id) === id);
+      return sub?.nome || `Cidade ${id}`;
+    });
+    if (srvNames.length === 0 && cidNames.length === 0) return "Todas as Lojas (Consolidado Grupo R3)";
+    const parts: string[] = [];
+    if (srvNames.length > 0) parts.push(srvNames.join(", "));
+    if (cidNames.length > 0) parts.push(cidNames.join(", "));
+    return parts.join(" — ");
+  }, [selectedServidores, selectedCidades, servidoresQ.data, sublojasQ.data]);
 
   // --- FILTRAGEM BASE DOS DADOS PELOS FILTROS SELECIONADOS ---
   const filteredFatData = useMemo(() => {
@@ -334,28 +454,40 @@ function DashboardPage() {
     if (selectedYear !== "todos") {
       list = list.filter((item) => extractYearStr(item.mes_inicio) === selectedYear);
     }
-    if (selectedServidor !== "todos") {
-      list = list.filter((item) => String(item.id_servidor) === selectedServidor);
+    if (selectedMonths.length > 0) {
+      const months = new Set(selectedMonths);
+      list = list.filter((item) => months.has(extractMonthStr(item.mes_inicio) ?? ""));
     }
-    if (selectedCidade !== "todas") {
-      list = list.filter((item) => String(item.id_cidade) === selectedCidade);
+    if (selectedServidores.length > 0) {
+      const set = new Set(selectedServidores);
+      list = list.filter((item) => set.has(String(item.id_servidor)));
+    }
+    if (selectedCidades.length > 0) {
+      const set = new Set(selectedCidades);
+      list = list.filter((item) => set.has(String(item.id_cidade)));
     }
     return list;
-  }, [faturamentoQ.data, selectedYear, selectedServidor, selectedCidade]);
+  }, [faturamentoQ.data, selectedYear, selectedMonths, selectedServidores, selectedCidades]);
 
   const filteredDreData = useMemo(() => {
     let list = dreQ.data ?? [];
     if (selectedYear !== "todos") {
       list = list.filter((item) => extractYearStr(item.mes_inicio) === selectedYear);
     }
-    if (selectedServidor !== "todos") {
-      list = list.filter((item) => String(item.id_servidor) === selectedServidor);
+    if (selectedMonths.length > 0) {
+      const months = new Set(selectedMonths);
+      list = list.filter((item) => months.has(extractMonthStr(item.mes_inicio) ?? ""));
     }
-    if (selectedCidade !== "todas") {
-      list = list.filter((item) => String(item.id_cidade) === selectedCidade);
+    if (selectedServidores.length > 0) {
+      const set = new Set(selectedServidores);
+      list = list.filter((item) => set.has(String(item.id_servidor)));
+    }
+    if (selectedCidades.length > 0) {
+      const set = new Set(selectedCidades);
+      list = list.filter((item) => set.has(String(item.id_cidade)));
     }
     return list;
-  }, [dreQ.data, selectedYear, selectedServidor, selectedCidade]);
+  }, [dreQ.data, selectedYear, selectedMonths, selectedServidores, selectedCidades]);
 
   // --- MAPEAMENTO MATRICIAL MENSAL (12 MESES: JAN a DEZ) ---
   // 1. Faturamento por Mês
@@ -515,13 +647,179 @@ function DashboardPage() {
   }, [margemContribMonthly, despesasOperacionaisMonthly]);
   const lucroLiquidoTotal = margemContribTotal - despesasOperacionaisTotal;
 
-  // Comissão Parceiro (Cálculo a definir futuramente pelo gestor, valor mantido zerado/em branco)
-  const comissaoParceiroMonthly: Record<string, number> = useMemo(() => {
-    const m: Record<string, number> = {};
-    MONTH_KEYS.forEach((k) => (m[k] = 0));
-    return m;
-  }, []);
-  const comissaoParceiroTotal = 0;
+  // --- IDENTIFICAÇÃO E CÁLCULO DE COMISSÃO DE PARCEIROS ---
+  // Identificação dos parceiros responsáveis pelo escopo filtrado
+  const partnerInfo = useMemo(() => {
+    const rules = parceirosRegrasQ.data ?? [];
+    if (rules.length === 0) {
+      return {
+        hasRules: false,
+        partners: [] as { nome: string; percentual: number; lojas: string[] }[],
+        displayLabel: "Sem regra de parceiro cadastrada",
+        badgeLabel: "Sem parceiro",
+        isSingle: false,
+        singlePartnerName: "",
+        singlePercent: 0,
+      };
+    }
+
+    const matchedMap = new Map<string, { nome: string; percentual: number; lojas: Set<string> }>();
+
+    const checkStore = (idSrv: any, idCid: any, loja: string, cid: string) => {
+      const rule = getRuleForStore({ id_servidor: idSrv, id_cidade: idCid, loja, cidade: cid }, rules);
+      if (rule) {
+        if (!matchedMap.has(rule.parceiro_nome)) {
+          matchedMap.set(rule.parceiro_nome, {
+            nome: rule.parceiro_nome,
+            percentual: Number(rule.percentual_comissao),
+            lojas: new Set(),
+          });
+        }
+        const storeLabel = cid && cid !== "Matriz" ? `${loja} (${cid})` : loja || "Matriz";
+        matchedMap.get(rule.parceiro_nome)!.lojas.add(storeLabel);
+      }
+    };
+
+    filteredFatData.forEach((f) => checkStore(f.id_servidor, f.id_cidade, f.loja, f.cidade));
+    filteredDreData.forEach((d) => checkStore(d.id_servidor, d.id_cidade, d.loja, d.cidade));
+
+    const partners = Array.from(matchedMap.values()).map((p) => ({
+      nome: p.nome,
+      percentual: p.percentual,
+      lojas: Array.from(p.lojas),
+    }));
+
+    if (partners.length === 1) {
+      const p = partners[0];
+      return {
+        hasRules: true,
+        partners,
+        displayLabel: `${p.nome} (${p.percentual.toFixed(1)}%)`,
+        badgeLabel: `${p.nome} · ${p.percentual.toFixed(1)}%`,
+        isSingle: true,
+        singlePartnerName: p.nome,
+        singlePercent: p.percentual,
+      };
+    } else if (partners.length > 1) {
+      return {
+        hasRules: true,
+        partners,
+        displayLabel: `${partners.length} Parceiros (${partners.map((p) => p.nome).slice(0, 3).join(", ")}${partners.length > 3 ? "..." : ""})`,
+        badgeLabel: `${partners.length} Parceiros`,
+        isSingle: false,
+        singlePartnerName: "",
+        singlePercent: 0,
+      };
+    }
+
+    return {
+      hasRules: false,
+      partners: [],
+      displayLabel: "Sem parceiro vinculado",
+      badgeLabel: "Sem parceiro",
+      isSingle: false,
+      singlePartnerName: "",
+      singlePercent: 0,
+    };
+  }, [parceirosRegrasQ.data, filteredFatData, filteredDreData]);
+
+  // Cálculo Mês a Mês da Comissão de Parceiro (Loja por Loja conforme regras ativas)
+  const partnerCommissions = useMemo(() => {
+    const rules = parceirosRegrasQ.data ?? [];
+    const monthlyComissao: Record<string, number> = {};
+    MONTH_KEYS.forEach((m) => (monthlyComissao[m] = 0));
+
+    if (rules.length === 0) {
+      return {
+        monthly: monthlyComissao,
+        total: 0,
+      };
+    }
+
+    // Agrupar faturamento, avarias e despesas operacionais por loja e por mês
+    const storeMap = new Map<
+      string,
+      {
+        storeInfo: { id_servidor: any; id_cidade: any; loja: string; cidade: string };
+        fat: Record<string, number>;
+        avarias: Record<string, number>;
+        desp: Record<string, number>;
+      }
+    >();
+
+    const getOrCreateStore = (idSrv: any, idCid: any, loja: string, cid: string) => {
+      const key = `${idSrv || 0}__${idCid || 0}__${loja || ""}__${cid || ""}`;
+      if (!storeMap.has(key)) {
+        const fatInit: Record<string, number> = {};
+        const avInit: Record<string, number> = {};
+        const despInit: Record<string, number> = {};
+        MONTH_KEYS.forEach((m) => {
+          fatInit[m] = 0;
+          avInit[m] = 0;
+          despInit[m] = 0;
+        });
+        storeMap.set(key, {
+          storeInfo: { id_servidor: idSrv, id_cidade: idCid, loja, cidade: cid },
+          fat: fatInit,
+          avarias: avInit,
+          desp: despInit,
+        });
+      }
+      return storeMap.get(key)!;
+    };
+
+    filteredFatData.forEach((item) => {
+      const m = extractMonthStr(item.mes_inicio);
+      if (m && monthlyComissao[m] !== undefined) {
+        const s = getOrCreateStore(item.id_servidor, item.id_cidade, item.loja, item.cidade);
+        s.fat[m] += Number(item.total_faturamento) || 0;
+      }
+    });
+
+    filteredDreData.forEach((item) => {
+      const m = extractMonthStr(item.mes_inicio);
+      if (m && monthlyComissao[m] !== undefined) {
+        const s = getOrCreateStore(item.id_servidor, item.id_cidade, item.loja, item.cidade);
+        const deb = Number(item.debito) || 0;
+        const group = item.grupo_dre || "Despesas Administrativas";
+        if (group === "Avarias") {
+          s.avarias[m] += deb;
+        } else if (
+          group === "Despesas Administrativas" ||
+          group === "Despesas com Logística" ||
+          group === "Taxas de Cartão" ||
+          group === "Tributos"
+        ) {
+          s.desp[m] += deb;
+        }
+      }
+    });
+
+    storeMap.forEach(({ storeInfo, fat, avarias, desp }) => {
+      const rule = getRuleForStore(storeInfo, rules);
+      if (rule && Number(rule.percentual_comissao) > 0) {
+        const pct = Number(rule.percentual_comissao) / 100;
+        MONTH_KEYS.forEach((m) => {
+          // Lucro Líquido da Loja naquele mês = Margem (Fat - Avarias) - Despesas
+          const lucroLoja = (fat[m] - avarias[m]) - desp[m];
+          if (lucroLoja > 0) {
+            monthlyComissao[m] += lucroLoja * pct;
+          }
+        });
+      }
+    });
+
+    const keysToSum = selectedMonths.length > 0 ? selectedMonths : MONTH_KEYS;
+    const totalPeriodo = keysToSum.reduce((acc, k) => acc + (monthlyComissao[k] || 0), 0);
+
+    return {
+      monthly: monthlyComissao,
+      total: totalPeriodo,
+    };
+  }, [parceirosRegrasQ.data, filteredFatData, filteredDreData, selectedMonths]);
+
+  const comissaoParceiroMonthly = partnerCommissions.monthly;
+  const comissaoParceiroTotal = partnerCommissions.total;
 
   // (=) Distribuição do Lucro = Lucro Líquido - Comissão Parceiro
   const distribuicaoLucroMonthly = useMemo(() => {
@@ -538,50 +836,31 @@ function DashboardPage() {
   const naoOperacionaisTotal = groupTotalsMap["nao_operacionais"]?.total || 0;
 
   // --- VALORES SELECIONADOS PARA O CARD DE APURAÇÃO EXECUTIVA ---
-  const activeMonthKey = selectedMonth === "todos" ? null : selectedMonth;
-  const activeMonthLabel = activeMonthKey
-    ? MONTH_LABELS.find((m) => m.key === activeMonthKey)?.full || activeMonthKey
-    : "Acumulado Anual";
+  // Como os dados base já respeitam o filtro de meses, os totais representam o período selecionado
+  const activeMonthLabel = !hasMonthFilter
+    ? "Acumulado Anual"
+    : visibleMonthLabels.length === 1
+      ? visibleMonthLabels[0].full
+      : visibleMonthLabels.map((m) => m.short).join(", ");
+  const yearLabel = selectedYear === "todos" ? "Todos os Anos" : selectedYear;
 
   const apuracaoValues = useMemo(() => {
-    if (activeMonthKey) {
-      const fat = faturamentoMensal[activeMonthKey] || 0;
-      const cmv = cmvMonthly[activeMonthKey] || 0;
-      const avarias = avariasMonthly[activeMonthKey] || 0;
-      const margem = fat - cmv - avarias;
-      const adm = groupTotalsMap["desp_adm"]?.monthly[activeMonthKey] || 0;
-      const log = groupTotalsMap["desp_log"]?.monthly[activeMonthKey] || 0;
-      const cartao = groupTotalsMap["taxas_cartao"]?.monthly[activeMonthKey] || 0;
-      const trib = groupTotalsMap["tributos"]?.monthly[activeMonthKey] || 0;
-      const despTot = adm + log + cartao + trib;
-      const lucro = margem - despTot;
-      const comissao = 0;
-      const dist = lucro - comissao;
-      const fixas = adm + log;
-      const variaveis = avarias + cartao + trib;
-      return { fat, cmv, avarias, margem, adm, log, cartao, trib, despTot, lucro, comissao, dist, fixas, variaveis };
-    } else {
-      const fat = faturamentoTotalAno;
-      const cmv = cmvTotal;
-      const avarias = avariasTotal;
-      const margem = margemContribTotal;
-      const adm = groupTotalsMap["desp_adm"]?.total || 0;
-      const log = groupTotalsMap["desp_log"]?.total || 0;
-      const cartao = groupTotalsMap["taxas_cartao"]?.total || 0;
-      const trib = groupTotalsMap["tributos"]?.total || 0;
-      const despTot = despesasOperacionaisTotal;
-      const lucro = lucroLiquidoTotal;
-      const comissao = 0;
-      const dist = distribuicaoLucroTotal;
-      const fixas = adm + log;
-      const variaveis = avarias + cartao + trib;
-      return { fat, cmv, avarias, margem, adm, log, cartao, trib, despTot, lucro, comissao, dist, fixas, variaveis };
-    }
+    const fat = faturamentoTotalAno;
+    const cmv = cmvTotal;
+    const avarias = avariasTotal;
+    const margem = margemContribTotal;
+    const adm = groupTotalsMap["desp_adm"]?.total || 0;
+    const log = groupTotalsMap["desp_log"]?.total || 0;
+    const cartao = groupTotalsMap["taxas_cartao"]?.total || 0;
+    const trib = groupTotalsMap["tributos"]?.total || 0;
+    const despTot = despesasOperacionaisTotal;
+    const lucro = lucroLiquidoTotal;
+    const comissao = comissaoParceiroTotal;
+    const dist = distribuicaoLucroTotal;
+    const fixas = adm + log;
+    const variaveis = avarias + cartao + trib;
+    return { fat, cmv, avarias, margem, adm, log, cartao, trib, despTot, lucro, comissao, dist, fixas, variaveis };
   }, [
-    activeMonthKey,
-    faturamentoMensal,
-    cmvMonthly,
-    avariasMonthly,
     groupTotalsMap,
     faturamentoTotalAno,
     cmvTotal,
@@ -589,12 +868,13 @@ function DashboardPage() {
     margemContribTotal,
     despesasOperacionaisTotal,
     lucroLiquidoTotal,
+    comissaoParceiroTotal,
     distribuicaoLucroTotal,
   ]);
 
   // Dados dos Gráficos
   const evolutionChartData = useMemo(() => {
-    return MONTH_LABELS.map((m) => ({
+    return visibleMonthLabels.map((m) => ({
       label: m.short,
       faturamento: faturamentoMensal[m.key] || 0,
       margemContrib: margemContribMonthly[m.key] || 0,
@@ -603,6 +883,7 @@ function DashboardPage() {
       distribuicao: distribuicaoLucroMonthly[m.key] || 0,
     }));
   }, [
+    visibleMonthLabels,
     faturamentoMensal,
     margemContribMonthly,
     despesasOperacionaisMonthly,
@@ -621,21 +902,13 @@ function DashboardPage() {
 
   const topLojasData = useMemo(() => {
     const storeMap = new Map<string, { nome: string; faturamento: number; despesas: number }>();
-    const monthFilterList = activeMonthKey
-      ? filteredFatData.filter((item) => extractMonthStr(item.mes_inicio) === activeMonthKey)
-      : filteredFatData;
-
-    const monthDreList = activeMonthKey
-      ? filteredDreData.filter((item) => extractMonthStr(item.mes_inicio) === activeMonthKey)
-      : filteredDreData;
-
-    monthFilterList.forEach((item) => {
+    filteredFatData.forEach((item) => {
       const name = item.cidade && item.cidade !== "Matriz" ? `${item.loja} - ${item.cidade}` : item.loja;
       if (!storeMap.has(name)) storeMap.set(name, { nome: name, faturamento: 0, despesas: 0 });
       storeMap.get(name)!.faturamento += Number(item.total_faturamento) || 0;
     });
 
-    monthDreList.forEach((item) => {
+    filteredDreData.forEach((item) => {
       const name = item.cidade && item.cidade !== "Matriz" ? `${item.loja} - ${item.cidade}` : item.loja;
       if (!storeMap.has(name)) storeMap.set(name, { nome: name, faturamento: 0, despesas: 0 });
       storeMap.get(name)!.despesas += Number(item.debito) || 0;
@@ -644,12 +917,11 @@ function DashboardPage() {
     return Array.from(storeMap.values())
       .sort((a, b) => b.faturamento - a.faturamento)
       .slice(0, 8);
-  }, [filteredFatData, filteredDreData, activeMonthKey]);
+  }, [filteredFatData, filteredDreData]);
 
   // Handler para abrir modal com os lançamentos originais da conta padronizada
   const handleCellClick = (accName: string, sampleCode: string, groupName: string, monthKey: string) => {
     const monthLabel = MONTH_LABELS.find((m) => m.key === monthKey)?.full || monthKey;
-    const yearLabel = selectedYear === "todos" ? "Todos os Anos" : selectedYear;
 
     const records = filteredDreData.filter((item) => {
       const matchAcc = (item.conta_padronizada || item.descricao_conta) === accName;
@@ -678,8 +950,8 @@ function DashboardPage() {
       "Grupo DRE": "(=) Faturamento",
       "Conta Padronizada": "FATURAMENTO BRUTO",
     };
-    MONTH_KEYS.forEach((m, idx) => (fatRow[MONTH_LABELS[idx].short] = faturamentoMensal[m]));
-    fatRow["Total Ano"] = faturamentoTotalAno;
+    visibleMonthLabels.forEach((ml) => (fatRow[ml.short] = faturamentoMensal[ml.key]));
+    fatRow[totalColumnLabel] = faturamentoTotalAno;
     fatRow["% Faturamento"] = "100.0%";
     rows.push(fatRow);
 
@@ -689,8 +961,8 @@ function DashboardPage() {
         "Grupo DRE": group.label,
         "Conta Padronizada": `TOTAL ${group.label.toUpperCase()}`,
       };
-      MONTH_KEYS.forEach((m, idx) => (gRow[MONTH_LABELS[idx].short] = group.monthly[m]));
-      gRow["Total Ano"] = group.total;
+      visibleMonthLabels.forEach((ml) => (gRow[ml.short] = group.monthly[ml.key]));
+      gRow[totalColumnLabel] = group.total;
       gRow["% Faturamento"] = faturamentoTotalAno > 0 ? formatPercent((group.total / faturamentoTotalAno) * 100) : "0.0%";
       rows.push(gRow);
 
@@ -699,24 +971,42 @@ function DashboardPage() {
           "Grupo DRE": group.label,
           "Conta Padronizada": `${acc.sampleCode ? `[${acc.sampleCode}] ` : ""}${acc.name}`,
         };
-        MONTH_KEYS.forEach((m, idx) => (accRow[MONTH_LABELS[idx].short] = acc.monthly[m]));
-        accRow["Total Ano"] = acc.total;
+        visibleMonthLabels.forEach((ml) => (accRow[ml.short] = acc.monthly[ml.key]));
+        accRow[totalColumnLabel] = acc.total;
         accRow["% Faturamento"] = faturamentoTotalAno > 0 ? formatPercent((acc.total / faturamentoTotalAno) * 100) : "0.0%";
         rows.push(accRow);
       });
     });
 
     // Totais Finais
+    const lucroRow: Record<string, unknown> = {
+      "Grupo DRE": "(=) Lucro Líquido",
+      "Conta Padronizada": "LUCRO LÍQUIDO OPERACIONAL",
+    };
+    visibleMonthLabels.forEach((ml) => (lucroRow[ml.short] = lucroLiquidoMonthly[ml.key] || 0));
+    lucroRow[totalColumnLabel] = lucroLiquidoTotal;
+    lucroRow["% Faturamento"] = faturamentoTotalAno > 0 ? formatPercent((lucroLiquidoTotal / faturamentoTotalAno) * 100) : "0.0%";
+    rows.push(lucroRow);
+
+    const comissaoRow: Record<string, unknown> = {
+      "Grupo DRE": "(-) Comissão Parceiro",
+      "Conta Padronizada": `COMISSÃO PARCEIRO (${partnerInfo.displayLabel})`,
+    };
+    visibleMonthLabels.forEach((ml) => (comissaoRow[ml.short] = comissaoParceiroMonthly[ml.key] || 0));
+    comissaoRow[totalColumnLabel] = comissaoParceiroTotal;
+    comissaoRow["% Faturamento"] = faturamentoTotalAno > 0 ? formatPercent((comissaoParceiroTotal / faturamentoTotalAno) * 100) : "0.0%";
+    rows.push(comissaoRow);
+
     const distRow: Record<string, unknown> = {
       "Grupo DRE": "(=) Distribuição do Lucro",
       "Conta Padronizada": "RESULTADO FINAL / DISTRIBUIÇÃO",
     };
-    MONTH_KEYS.forEach((m, idx) => (distRow[MONTH_LABELS[idx].short] = distribuicaoLucroMonthly[m]));
-    distRow["Total Ano"] = distribuicaoLucroTotal;
+    visibleMonthLabels.forEach((ml) => (distRow[ml.short] = distribuicaoLucroMonthly[ml.key] || 0));
+    distRow[totalColumnLabel] = distribuicaoLucroTotal;
     distRow["% Faturamento"] = faturamentoTotalAno > 0 ? formatPercent((distribuicaoLucroTotal / faturamentoTotalAno) * 100) : "0.0%";
     rows.push(distRow);
 
-    exportToXLSX(rows, `DRE_Gerencial_Grupo_R3_${selectedYear}`);
+    exportToXLSX(rows, `DRE_Gerencial_Grupo_R3_${selectedYear}${hasMonthFilter ? `_${visibleMonthKeys.join("-")}` : ""}`);
   };
 
   return (
@@ -761,68 +1051,40 @@ function DashboardPage() {
             </SelectContent>
           </Select>
 
-          {/* Filtro de Mês */}
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="h-8 w-[120px] text-xs rounded-lg border-border bg-background">
-              <SelectValue placeholder="Mês" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos" className="text-xs font-semibold text-primary">
-                Todos os Meses
-              </SelectItem>
-              {MONTH_LABELS.map((m) => (
-                <SelectItem key={m.key} value={m.key} className="text-xs">
-                  {m.full}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Filtro de Meses (múltiplo) */}
+          <MultiSelectFilter
+            options={monthOptions}
+            selected={selectedMonths}
+            onChange={setSelectedMonths}
+            placeholder="Meses"
+            searchPlaceholder="Buscar mês..."
+            className="w-[130px]"
+          />
 
-          {/* Filtro de Loja Matriz */}
-          <Select
-            value={selectedServidor}
-            onValueChange={(val) => {
-              setSelectedServidor(val);
-              setSelectedCidade("todas");
-            }}
-          >
-            <SelectTrigger className="h-8 w-[160px] text-xs rounded-lg border-border bg-background truncate">
-              <Building2 className="h-3.5 w-3.5 mr-1 text-muted-foreground shrink-0" />
-              <SelectValue placeholder="Matriz" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos" className="text-xs font-semibold text-primary">
-                Todas as Matrizes
-              </SelectItem>
-              {(servidoresQ.data ?? []).map((s) => (
-                <SelectItem key={s.servidor_id} value={String(s.servidor_id)} className="text-xs">
-                  {s.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Filtro de Loja Matriz (múltiplo, com busca) */}
+          <MultiSelectFilter
+            options={servidorOptions}
+            selected={selectedServidores}
+            onChange={handleServidoresChange}
+            placeholder="Lojas"
+            searchPlaceholder="Buscar loja..."
+            emptyText="Nenhuma loja encontrada."
+            icon={<Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+            className="w-[170px]"
+          />
 
-          {/* Filtro de Subloja / Cidade */}
-          <Select
-            value={selectedCidade}
-            onValueChange={setSelectedCidade}
-            disabled={filteredSublojas.length === 0}
-          >
-            <SelectTrigger className="h-8 w-[150px] text-xs rounded-lg border-border bg-background truncate">
-              <MapPin className="h-3.5 w-3.5 mr-1 text-muted-foreground shrink-0" />
-              <SelectValue placeholder="Filial / Cidade" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas" className="text-xs font-semibold text-primary">
-                Todas as Filiais
-              </SelectItem>
-              {filteredSublojas.map((sub) => (
-                <SelectItem key={sub.cidade_id} value={String(sub.cidade_id)} className="text-xs">
-                  {sub.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Filtro de Subloja / Cidade (múltiplo, com busca) */}
+          <MultiSelectFilter
+            options={sublojaOptions}
+            selected={selectedCidades}
+            onChange={setSelectedCidades}
+            placeholder="Filiais"
+            searchPlaceholder="Buscar filial..."
+            emptyText="Nenhuma filial encontrada."
+            icon={<MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+            className="w-[160px]"
+            disabled={sublojaOptions.length === 0}
+          />
 
           <Button
             variant="outline"
@@ -859,7 +1121,7 @@ function DashboardPage() {
                 {formatMoney(apuracaoValues.fat)}
               </div>
               <p className="text-[11px] text-muted-foreground mt-1">
-                {activeMonthKey ? `${activeMonthLabel} de ${selectedYear}` : `Acumulado ${selectedYear}`}
+                {hasMonthFilter ? `${activeMonthLabel} de ${yearLabel}` : `Acumulado ${yearLabel}`}
               </p>
             </Card>
 
@@ -933,13 +1195,20 @@ function DashboardPage() {
               </div>
             </Card>
 
-            {/* KPI 5: Distribuição do Lucro */}
-            <Card className="p-4 rounded-xl border border-border bg-card shadow-sm col-span-2 sm:col-span-2 hover:border-primary/40 transition-all">
+            {/* KPI 5: Distribuição do Lucro / Comissão Parceiro */}
+            <Card className="p-4 rounded-xl border border-border bg-card shadow-sm col-span-2 sm:col-span-2 hover:border-indigo-500/40 transition-all">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  (=) Distribuição do Lucro
-                </span>
-                <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    (=) Distribuição do Lucro
+                  </span>
+                  {partnerInfo.hasRules && (
+                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30 font-mono">
+                      {partnerInfo.badgeLabel}
+                    </Badge>
+                  )}
+                </div>
+                <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
                   <Wallet className="h-4 w-4" />
                 </div>
               </div>
@@ -951,9 +1220,12 @@ function DashboardPage() {
               >
                 {formatMoney(apuracaoValues.dist)}
               </div>
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1">
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1 gap-2 flex-wrap">
                 <span className="text-muted-foreground">
-                  Comissão Parceiro: <strong className="text-muted-foreground/80 font-mono italic">A definir (R$ 0,00)</strong>
+                  Comissão Parceiro:{" "}
+                  <strong className="text-indigo-600 dark:text-indigo-400 font-mono font-semibold">
+                    {formatMoney(apuracaoValues.comissao)}
+                  </strong>
                 </span>
                 <span>
                   Retorno Efetivo:{" "}
@@ -1135,23 +1407,38 @@ function DashboardPage() {
               {/* 11. Comissão parceiro */}
               <div className="flex items-center justify-between p-2 text-muted-foreground hover:bg-muted/30">
                 <div className="flex items-center gap-1.5 font-sans">
-                  <span>Comissão parceiro</span>
-                  <Badge variant="outline" className="text-[9px] py-0 px-1 border-muted-foreground/30 text-muted-foreground font-normal">
-                    a definir
+                  <span className="text-foreground font-medium">Comissão parceiro</span>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[9px] py-0 px-1 font-mono",
+                      partnerInfo.hasRules
+                        ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-600 dark:text-indigo-400 font-semibold"
+                        : "border-muted-foreground/30 text-muted-foreground font-normal"
+                    )}
+                  >
+                    {partnerInfo.badgeLabel}
                   </Badge>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-muted-foreground/60 italic">—</span>
-                  <span className="w-14 text-right text-muted-foreground/60">0,0%</span>
+                  <span className="text-indigo-600 dark:text-indigo-400 font-mono font-semibold">
+                    {formatMoney(apuracaoValues.comissao)}
+                  </span>
+                  <span className="w-14 text-right text-indigo-600 dark:text-indigo-400 font-mono">
+                    {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.comissao / apuracaoValues.fat) * 100) : "0,0%"}
+                  </span>
                 </div>
               </div>
 
               {/* 12. Distribuição do lucro */}
               <div className="flex items-center justify-between p-3 bg-emerald-500/15 font-bold text-sm border-t-2 border-emerald-500/30">
-                <span className="font-sans text-emerald-700 dark:text-emerald-400">(=) Distribuição do lucro</span>
+                <div className="flex flex-col">
+                  <span className="font-sans text-emerald-700 dark:text-emerald-400">(=) Distribuição do lucro</span>
+                  <span className="text-[10px] text-muted-foreground font-normal font-sans">Resultado pós-comissão</span>
+                </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-emerald-700 dark:text-emerald-400">{formatMoney(apuracaoValues.dist)}</span>
-                  <span className="w-14 text-right text-emerald-700 dark:text-emerald-400">
+                  <span className="text-emerald-700 dark:text-emerald-400 font-mono">{formatMoney(apuracaoValues.dist)}</span>
+                  <span className="w-14 text-right text-emerald-700 dark:text-emerald-400 font-mono">
                     {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.dist / apuracaoValues.fat) * 100) : "0,0%"}
                   </span>
                 </div>
@@ -1267,15 +1554,15 @@ function DashboardPage() {
             <thead className="sticky top-0 z-30 bg-card border-b border-border shadow-sm">
               <tr className="text-muted-foreground font-semibold uppercase tracking-wider">
                 <th className="py-3 px-4 min-w-[300px] max-w-[300px] sticky left-0 bg-card z-40 border-r border-border shadow-md text-left">
-                  Estrutura Gerencial / Conta Padronizada
+                  Estrutura Gerencial
                 </th>
-                {MONTH_LABELS.map((m) => (
+                {visibleMonthLabels.map((m) => (
                   <th key={m.key} className="py-3 px-3 text-right min-w-[110px]">
                     {m.short}
                   </th>
                 ))}
                 <th className="py-3 px-4 text-right min-w-[130px] font-bold text-foreground bg-muted/60 border-l border-border">
-                  Total Ano
+                  {totalColumnLabel}
                 </th>
                 <th className="py-3 px-3 text-right min-w-[85px] font-bold text-muted-foreground bg-muted/40 border-l border-border">
                   % Fat.
@@ -1294,7 +1581,7 @@ function DashboardPage() {
                     <span>(=) FATURAMENTO</span>
                   </div>
                 </td>
-                {MONTH_KEYS.map((m) => (
+                {visibleMonthKeys.map((m) => (
                   <td key={m} className="py-3 px-3 text-right text-emerald-700 dark:text-emerald-400">
                     {formatMoney(faturamentoMensal[m], true)}
                   </td>
@@ -1312,7 +1599,7 @@ function DashboardPage() {
                 <td className="py-2.5 px-4 font-sans min-w-[300px] max-w-[300px] sticky left-0 bg-card z-20 border-r border-border shadow-md pl-7">
                   (-) Custo da mercadoria vendida
                 </td>
-                {MONTH_KEYS.map((m) => (
+                {visibleMonthKeys.map((m) => (
                   <td key={m} className="py-2.5 px-3 text-right">
                     {formatMoney(cmvMonthly[m], true)}
                   </td>
@@ -1331,7 +1618,8 @@ function DashboardPage() {
                 expandedGroups.has("avarias"),
                 toggleGroup,
                 faturamentoTotalAno,
-                handleCellClick
+                handleCellClick,
+                visibleMonthKeys
               )}
 
               {/* ═══════════════════════════════════════════════════════════════════ */}
@@ -1344,7 +1632,7 @@ function DashboardPage() {
                     <span>(=) MARGEM DE CONTRIBUIÇÃO</span>
                   </div>
                 </td>
-                {MONTH_KEYS.map((m) => (
+                {visibleMonthKeys.map((m) => (
                   <td key={m} className="py-3 px-3 text-right text-cyan-700 dark:text-cyan-400">
                     {formatMoney(margemContribMonthly[m], true)}
                   </td>
@@ -1363,7 +1651,8 @@ function DashboardPage() {
                 expandedGroups.has("desp_adm"),
                 toggleGroup,
                 faturamentoTotalAno,
-                handleCellClick
+                handleCellClick,
+                visibleMonthKeys
               )}
 
               {/* 6. (-) DESPESA LOGÍSTICA (Expansível) */}
@@ -1372,7 +1661,8 @@ function DashboardPage() {
                 expandedGroups.has("desp_log"),
                 toggleGroup,
                 faturamentoTotalAno,
-                handleCellClick
+                handleCellClick,
+                visibleMonthKeys
               )}
 
               {/* 7. (-) TAXAS DE CARTÃO (Expansível) */}
@@ -1381,7 +1671,8 @@ function DashboardPage() {
                 expandedGroups.has("taxas_cartao"),
                 toggleGroup,
                 faturamentoTotalAno,
-                handleCellClick
+                handleCellClick,
+                visibleMonthKeys
               )}
 
               {/* 8. (-) TRIBUTOS (Expansível) */}
@@ -1390,7 +1681,8 @@ function DashboardPage() {
                 expandedGroups.has("tributos"),
                 toggleGroup,
                 faturamentoTotalAno,
-                handleCellClick
+                handleCellClick,
+                visibleMonthKeys
               )}
 
               {/* ═══════════════════════════════════════════════════════════════════ */}
@@ -1403,7 +1695,7 @@ function DashboardPage() {
                     <span>TOTAL DESPESAS</span>
                   </div>
                 </td>
-                {MONTH_KEYS.map((m) => (
+                {visibleMonthKeys.map((m) => (
                   <td key={m} className="py-3 px-3 text-right">
                     {formatMoney(despesasOperacionaisMonthly[m], true)}
                   </td>
@@ -1426,7 +1718,7 @@ function DashboardPage() {
                     <span>(=) LUCRO LÍQUIDO</span>
                   </div>
                 </td>
-                {MONTH_KEYS.map((m) => {
+                {visibleMonthKeys.map((m) => {
                   const res = lucroLiquidoMonthly[m];
                   return (
                     <td key={m} className={cn("py-3 px-3 text-right", res >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>
@@ -1442,27 +1734,46 @@ function DashboardPage() {
                 </td>
               </tr>
 
-              {/* 11. (-) COMISSÃO PARCEIRO (Cálculo a definir) */}
+              {/* 11. (-) COMISSÃO PARCEIRO */}
               <tr className="bg-card/70 font-semibold text-muted-foreground hover:bg-muted/40 transition-colors">
                 <td className="py-2.5 px-4 font-sans min-w-[300px] max-w-[300px] sticky left-0 bg-card z-20 border-r border-border shadow-md">
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-500/40 shrink-0" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0" />
                     <span className="text-foreground">(-) COMISSÃO PARCEIRO</span>
-                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-dashed border-indigo-500/40 text-indigo-500 font-mono">
-                      Cálculo a definir
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[10px] py-0 px-1.5 font-mono",
+                        partnerInfo.hasRules
+                          ? "bg-indigo-500/10 border-indigo-500/40 text-indigo-600 dark:text-indigo-400 font-semibold"
+                          : "border-dashed text-muted-foreground"
+                      )}
+                    >
+                      {partnerInfo.badgeLabel}
                     </Badge>
                   </div>
                 </td>
-                {MONTH_KEYS.map((m) => (
-                  <td key={m} className="py-2.5 px-3 text-right font-mono text-muted-foreground/60">
-                    —
-                  </td>
-                ))}
-                <td className="py-2.5 px-4 text-right font-bold font-mono text-muted-foreground/60 bg-muted/30 border-l border-border">
-                  —
+                {visibleMonthKeys.map((m) => {
+                  const val = comissaoParceiroMonthly[m] || 0;
+                  return (
+                    <td
+                      key={m}
+                      className={cn(
+                        "py-2.5 px-3 text-right font-mono",
+                        val > 0 ? "text-indigo-600 dark:text-indigo-400 font-semibold" : "text-muted-foreground/50"
+                      )}
+                    >
+                      {val > 0 ? formatMoney(val, true) : "—"}
+                    </td>
+                  );
+                })}
+                <td className="py-2.5 px-4 text-right font-bold font-mono text-indigo-600 dark:text-indigo-400 bg-muted/30 border-l border-border">
+                  {comissaoParceiroTotal > 0 ? formatMoney(comissaoParceiroTotal) : "—"}
                 </td>
-                <td className="py-2.5 px-3 text-right font-medium text-muted-foreground/60 bg-muted/10 border-l border-border">
-                  0,0%
+                <td className="py-2.5 px-3 text-right font-medium text-indigo-600/80 dark:text-indigo-400/80 bg-muted/10 border-l border-border">
+                  {faturamentoTotalAno > 0 && comissaoParceiroTotal > 0
+                    ? formatPercent((comissaoParceiroTotal / faturamentoTotalAno) * 100)
+                    : "0,0%"}
                 </td>
               </tr>
 
@@ -1474,9 +1785,12 @@ function DashboardPage() {
                   <div className="flex items-center gap-2">
                     <span className={cn("w-3 h-3 rounded-full shrink-0", distribuicaoLucroTotal >= 0 ? "bg-emerald-600" : "bg-rose-600")} />
                     <span>(=) DISTRIBUIÇÃO DO LUCRO</span>
+                    <Badge variant="outline" className="text-[10px] py-0 px-1 text-muted-foreground font-normal">
+                      Resultado Líquido
+                    </Badge>
                   </div>
                 </td>
-                {MONTH_KEYS.map((m) => {
+                {visibleMonthKeys.map((m) => {
                   const dist = distribuicaoLucroMonthly[m];
                   return (
                     <td key={m} className={cn("py-3.5 px-3 text-right", dist >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300")}>
@@ -1498,7 +1812,8 @@ function DashboardPage() {
                 expandedGroups.has("investimentos"),
                 toggleGroup,
                 faturamentoTotalAno,
-                handleCellClick
+                handleCellClick,
+                visibleMonthKeys
               )}
 
               {renderGroupSection(
@@ -1506,7 +1821,8 @@ function DashboardPage() {
                 expandedGroups.has("nao_operacionais"),
                 toggleGroup,
                 faturamentoTotalAno,
-                handleCellClick
+                handleCellClick,
+                visibleMonthKeys
               )}
             </tbody>
           </table>
@@ -1823,7 +2139,8 @@ function renderGroupSection(
   isExpanded: boolean,
   toggleGroup: (id: string) => void,
   faturamentoTotalAno: number,
-  handleCellClick: (accName: string, sampleCode: string, groupName: string, monthKey: string) => void
+  handleCellClick: (accName: string, sampleCode: string, groupName: string, monthKey: string) => void,
+  monthKeys: string[]
 ) {
   if (!group) return null;
 
@@ -1852,7 +2169,7 @@ function renderGroupSection(
             </Badge>
           </div>
         </td>
-        {MONTH_KEYS.map((m) => (
+        {monthKeys.map((m) => (
           <td key={m} className={cn("py-2.5 px-3 text-right font-mono", group.textClass)}>
             {formatMoney(group.monthly[m], true)}
           </td>
@@ -1896,7 +2213,7 @@ function renderGroupSection(
                   <span className="text-foreground/90 font-medium truncate">{acc.name}</span>
                 </div>
               </td>
-              {MONTH_KEYS.map((m) => {
+              {monthKeys.map((m) => {
                 const val = acc.monthly[m];
                 const hasVal = val && Math.abs(val) > 0.01;
                 return (
