@@ -16,6 +16,7 @@ import {
   Building2,
   HelpCircle,
   FileSpreadsheet,
+  AlertCircle,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,8 +59,10 @@ export function ParceirosTab() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [partnerFilter, setPartnerFilter] = useState<string>("todos");
+  const [statusFilter, setStatusFilter] = useState<"todos" | "ativos" | "inativos">("todos");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ParceiroRegra | null>(null);
+  const [deleteConfirmItem, setDeleteConfirmItem] = useState<ParceiroRegra | null>(null);
 
   // Form states
   const [formParceiroNome, setFormParceiroNome] = useState("");
@@ -131,6 +134,12 @@ export function ParceirosTab() {
       list = list.filter((r) => r.parceiro_nome.trim().toUpperCase() === partnerFilter);
     }
 
+    if (statusFilter === "ativos") {
+      list = list.filter((r) => r.ativo);
+    } else if (statusFilter === "inativos") {
+      list = list.filter((r) => !r.ativo);
+    }
+
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
@@ -143,7 +152,7 @@ export function ParceirosTab() {
     }
 
     return list;
-  }, [regrasQ.data, partnerFilter, search]);
+  }, [regrasQ.data, partnerFilter, statusFilter, search]);
 
   // Mutation para Salvar / Editar
   const saveMutation = useMutation({
@@ -175,21 +184,22 @@ export function ParceirosTab() {
     },
   });
 
-  // Mutation para Deletar
-  const deleteMutation = useMutation({
+  // Mutation para Inativar (Soft Delete)
+  const inativarMutation = useMutation({
     mutationFn: async (id: number) => {
       const { error } = await supabase
         .from("grupo_r3_parceiros_regras" as never)
-        .delete()
+        .update({ ativo: false, updated_at: new Date().toISOString() } as never)
         .eq("id" as never, id);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Vínculo removido com sucesso!");
+      toast.success("Vínculo inativado com sucesso!");
       qc.invalidateQueries({ queryKey: ["parceiros-regras"] });
+      setDeleteConfirmItem(null);
     },
     onError: (err: any) => {
-      toast.error(`Erro ao excluir: ${err.message}`);
+      toast.error(`Erro ao inativar: ${err.message}`);
     },
   });
 
@@ -353,7 +363,7 @@ export function ParceirosTab() {
           </div>
 
           <Select value={partnerFilter} onValueChange={setPartnerFilter}>
-            <SelectTrigger className="h-9 w-full sm:w-[200px] text-xs rounded-xl border-border bg-card">
+            <SelectTrigger className="h-9 w-full sm:w-[190px] text-xs rounded-xl border-border bg-card">
               <SelectValue placeholder="Filtrar por Parceiro" />
             </SelectTrigger>
             <SelectContent>
@@ -363,6 +373,17 @@ export function ParceirosTab() {
                   {p}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={statusFilter} onValueChange={(val: any) => setStatusFilter(val)}>
+            <SelectTrigger className="h-9 w-full sm:w-[130px] text-xs rounded-xl border-border bg-card">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="ativos">Somente Ativos</SelectItem>
+              <SelectItem value="inativos">Somente Inativos</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -389,13 +410,23 @@ export function ParceirosTab() {
             </thead>
             <tbody className="divide-y divide-border">
               {filteredRegras.map((regra) => (
-                <tr key={regra.id} className="hover:bg-muted/30 transition-colors">
+                <tr key={regra.id} className={cn("hover:bg-muted/30 transition-colors", !regra.ativo && "opacity-60 bg-muted/10")}>
                   <td className="py-3 px-4 font-medium text-foreground">
                     <div className="flex items-center gap-2">
-                      <div className="h-7 w-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                      <div className={cn(
+                        "h-7 w-7 rounded-full flex items-center justify-center font-bold text-xs uppercase shrink-0",
+                        regra.ativo ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                      )}>
                         {regra.parceiro_nome.slice(0, 2)}
                       </div>
-                      <span className="font-semibold">{regra.parceiro_nome}</span>
+                      <div>
+                        <span className="font-semibold">{regra.parceiro_nome}</span>
+                        {!regra.ativo && (
+                          <Badge variant="outline" className="ml-2 text-[9px] py-0 px-1 border-muted-foreground/30 text-muted-foreground">
+                            Inativo
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </td>
 
@@ -467,13 +498,9 @@ export function ParceirosTab() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => {
-                          if (confirm(`Remover o vínculo do parceiro ${regra.parceiro_nome} com esta loja?`)) {
-                            if (regra.id) deleteMutation.mutate(regra.id);
-                          }
-                        }}
-                        className="h-7 w-7 p-0 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
-                        title="Excluir regra"
+                        onClick={() => setDeleteConfirmItem(regra)}
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        title="Inativar vínculo"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -619,6 +646,51 @@ export function ParceirosTab() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Confirmação para Inativação */}
+      <Dialog
+        open={!!deleteConfirmItem}
+        onOpenChange={(open) => !open && setDeleteConfirmItem(null)}
+      >
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2">
+              <AlertCircle className="h-5 w-5" /> Inativar Vínculo de Parceiro?
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-2">
+              Você tem certeza que deseja inativar o vínculo de:
+              <br />
+              <strong className="text-foreground font-semibold block mt-1">
+                {deleteConfirmItem?.parceiro_nome} — {deleteConfirmItem?.cidade_nome || deleteConfirmItem?.servidor_nome || "Loja"}
+              </strong>
+              <span className="block mt-2 text-[11px] text-muted-foreground">
+                O registro <strong>não será excluído</strong> do banco de dados, apenas marcado como inativo e desconsiderado nos cálculos.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteConfirmItem(null)}
+              className="text-xs rounded-xl"
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              disabled={inativarMutation.isPending}
+              onClick={() => {
+                if (deleteConfirmItem?.id) inativarMutation.mutate(deleteConfirmItem.id);
+              }}
+              className="text-xs rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-medium"
+            >
+              {inativarMutation.isPending ? "Inativando..." : "Confirmar Inativação"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

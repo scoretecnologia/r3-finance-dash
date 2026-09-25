@@ -48,6 +48,7 @@ export interface DeparaItem {
   ordem_grupo: number;
   ordem_conta: number;
   natureza?: string;
+  ativo?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -142,6 +143,7 @@ export function PlanoContasTab() {
   const [search, setSearch] = useState("");
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>("todos");
   const [selectedNaturezaFilter, setSelectedNaturezaFilter] = useState<string>("todos");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<"todos" | "ativos" | "inativos">("todos");
   const [editItem, setEditItem] = useState<DeparaItem | null>(null);
   const [isNewOpen, setIsNewOpen] = useState(false);
   const [deleteConfirmItem, setDeleteConfirmItem] = useState<DeparaItem | null>(null);
@@ -202,6 +204,7 @@ export function PlanoContasTab() {
             subgrupo: cleanSub,
             tipo: groupConfig.tipo,
             ordem_grupo: groupConfig.ordem,
+            ativo: editItem?.ativo ?? true,
             updated_at: new Date().toISOString(),
           } as never,
           { onConflict: "conta_origem" }
@@ -235,12 +238,12 @@ export function PlanoContasTab() {
     },
   });
 
-  // Mutação para Excluir Regra
-  const deleteMutation = useMutation({
+  // Mutação para Inativar Regra (Soft Delete)
+  const inativarMutation = useMutation({
     mutationFn: async (origem: string) => {
       const { error } = await supabase
         .from("grupo_r3_plano_contas_depara" as never)
-        .delete()
+        .update({ ativo: false, updated_at: new Date().toISOString() } as never)
         .eq("conta_origem", origem);
       if (error) throw error;
       return true;
@@ -248,11 +251,31 @@ export function PlanoContasTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["plano-contas-depara"] });
       qc.invalidateQueries({ queryKey: ["dre-all"] });
-      toast.success("Regra excluída com sucesso.");
+      toast.success("Regra inativada com sucesso.");
       setDeleteConfirmItem(null);
     },
     onError: (err: any) => {
-      toast.error(`Erro ao excluir: ${err.message}`);
+      toast.error(`Erro ao inativar: ${err.message}`);
+    },
+  });
+
+  // Mutação para Alterar Status (Toggle Ativo)
+  const toggleAtivoMutation = useMutation({
+    mutationFn: async ({ origem, ativo }: { origem: string; ativo: boolean }) => {
+      const { error } = await supabase
+        .from("grupo_r3_plano_contas_depara" as never)
+        .update({ ativo, updated_at: new Date().toISOString() } as never)
+        .eq("conta_origem", origem);
+      if (error) throw error;
+      return true;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["plano-contas-depara"] });
+      qc.invalidateQueries({ queryKey: ["dre-all"] });
+      toast.success("Status da regra atualizado!");
+    },
+    onError: (err: any) => {
+      toast.error(`Erro ao alterar status: ${err.message}`);
     },
   });
 
@@ -297,6 +320,12 @@ export function PlanoContasTab() {
       list = list.filter((item) => (item.natureza || "Despesa Fixa") === selectedNaturezaFilter);
     }
 
+    if (selectedStatusFilter === "ativos") {
+      list = list.filter((item) => item.ativo !== false);
+    } else if (selectedStatusFilter === "inativos") {
+      list = list.filter((item) => item.ativo === false);
+    }
+
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(
@@ -309,7 +338,7 @@ export function PlanoContasTab() {
     }
 
     return list;
-  }, [deparaQ.data, selectedGroupFilter, selectedNaturezaFilter, search]);
+  }, [deparaQ.data, selectedGroupFilter, selectedNaturezaFilter, selectedStatusFilter, search]);
 
   // Contagens por Natureza e Grupo
   const naturezaStats = useMemo(() => {
@@ -434,6 +463,24 @@ export function PlanoContasTab() {
               ))}
             </SelectContent>
           </Select>
+
+          {/* Filtro por Status */}
+          <Select value={selectedStatusFilter} onValueChange={(val: any) => setSelectedStatusFilter(val)}>
+            <SelectTrigger className="w-[130px] h-10 rounded-xl bg-card border-border/50 text-xs">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos" className="text-xs">
+                Todos
+              </SelectItem>
+              <SelectItem value="ativos" className="text-xs">
+                Somente Ativos
+              </SelectItem>
+              <SelectItem value="inativos" className="text-xs">
+                Somente Inativos
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Botões de Ação */}
@@ -473,19 +520,20 @@ export function PlanoContasTab() {
                 <th className="py-3 px-3 min-w-[140px]">Natureza (Fixa/Variável)</th>
                 <th className="py-3 px-4 min-w-[170px]">Grupo Gerencial DRE</th>
                 <th className="py-3 px-3 min-w-[110px]">Subgrupo</th>
+                <th className="py-3 px-3 text-center w-[75px]">Status</th>
                 <th className="py-3 px-3 text-right w-[90px]">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40">
               {deparaQ.isLoading ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={7} className="py-12 text-center text-muted-foreground">
                     Carregando regras de De-Para...
                   </td>
                 </tr>
               ) : filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={7} className="py-12 text-center text-muted-foreground">
                     Nenhuma regra encontrada para este filtro.
                   </td>
                 </tr>
@@ -496,16 +544,23 @@ export function PlanoContasTab() {
                   const natConfig =
                     NATUREZA_CONFIG.find((n) => n.value === item.natureza) || NATUREZA_CONFIG[0];
 
+                  const isAtivo = item.ativo !== false;
+
                   return (
                     <tr
                       key={item.conta_origem}
-                      className="hover:bg-muted/30 transition-colors group"
+                      className={cn("hover:bg-muted/30 transition-colors group", !isAtivo && "opacity-60 bg-muted/10")}
                     >
                       {/* Termo da Loja / ERP */}
                       <td className="py-2.5 px-4 font-mono font-medium text-foreground">
                         <span className="px-2 py-0.5 rounded bg-muted text-[11px] border border-border/40 inline-block max-w-[300px] truncate" title={item.conta_origem}>
                           {item.conta_origem}
                         </span>
+                        {!isAtivo && (
+                          <Badge variant="outline" className="ml-2 text-[9px] py-0 px-1 border-muted-foreground/30 text-muted-foreground">
+                            Inativo
+                          </Badge>
+                        )}
                       </td>
 
                       {/* Nome Padronizado */}
@@ -542,6 +597,16 @@ export function PlanoContasTab() {
                         )}
                       </td>
 
+                      {/* Status Switch */}
+                      <td className="py-2.5 px-3 text-center">
+                        <Switch
+                          checked={isAtivo}
+                          onCheckedChange={(val) => {
+                            toggleAtivoMutation.mutate({ origem: item.conta_origem, ativo: val });
+                          }}
+                        />
+                      </td>
+
                       {/* Ações */}
                       <td className="py-2.5 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -558,8 +623,8 @@ export function PlanoContasTab() {
                             variant="ghost"
                             size="icon"
                             onClick={() => setDeleteConfirmItem(item)}
-                            className="h-7 w-7 rounded-lg text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
-                            title="Excluir regra"
+                            className="h-7 w-7 rounded-lg text-muted-foreground/60 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                            title="Inativar regra"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
@@ -736,22 +801,25 @@ export function PlanoContasTab() {
         </DialogContent>
       </Dialog>
 
-      {/* ── MODAL DE CONFIRMAÇÃO DE EXCLUSÃO ── */}
+      {/* ── MODAL DE CONFIRMAÇÃO DE INATIVAÇÃO ── */}
       <Dialog
         open={!!deleteConfirmItem}
         onOpenChange={(open) => !open && setDeleteConfirmItem(null)}
       >
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-destructive flex items-center gap-2">
-              <AlertCircle className="h-5 w-5" /> Excluir Regra de De-Para?
+            <DialogTitle className="text-base font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2">
+              <AlertCircle className="h-5 w-5" /> Inativar Regra de De-Para?
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground mt-2">
-              Você tem certeza que deseja remover o mapeamento de:
+              Você tem certeza que deseja inativar o mapeamento de:
               <br />
               <strong className="text-foreground font-mono block mt-1">
                 {deleteConfirmItem?.conta_origem}
               </strong>
+              <span className="block mt-2 text-[11px] text-muted-foreground">
+                O registro <strong>não será excluído</strong> do banco de dados, apenas marcado como inativo.
+              </span>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 pt-2">
@@ -764,15 +832,15 @@ export function PlanoContasTab() {
               Cancelar
             </Button>
             <Button
-              variant="destructive"
+              variant="default"
               size="sm"
-              disabled={deleteMutation.isPending}
+              disabled={inativarMutation.isPending}
               onClick={() =>
-                deleteConfirmItem && deleteMutation.mutate(deleteConfirmItem.conta_origem)
+                deleteConfirmItem && inativarMutation.mutate(deleteConfirmItem.conta_origem)
               }
-              className="text-xs rounded-xl"
+              className="text-xs rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-medium"
             >
-              {deleteMutation.isPending ? "Excluindo..." : "Confirmar Exclusão"}
+              {inativarMutation.isPending ? "Inativando..." : "Confirmar Inativação"}
             </Button>
           </DialogFooter>
         </DialogContent>
