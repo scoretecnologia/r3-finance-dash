@@ -1785,9 +1785,6 @@ function DashboardPage() {
                   <div className="flex items-center gap-2">
                     <span className={cn("w-3 h-3 rounded-full shrink-0", distribuicaoLucroTotal >= 0 ? "bg-emerald-600" : "bg-rose-600")} />
                     <span>(=) DISTRIBUIÇÃO DO LUCRO</span>
-                    <Badge variant="outline" className="text-[10px] py-0 px-1 text-muted-foreground font-normal">
-                      Resultado Líquido
-                    </Badge>
                   </div>
                 </td>
                 {visibleMonthKeys.map((m) => {
