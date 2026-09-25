@@ -209,14 +209,6 @@ const MANAGERIAL_GROUPS: ManagerialGroupDef[] = [
     textClass: "text-orange-600 dark:text-orange-400",
   },
   {
-    id: "comissao_parceiro",
-    label: "Comissão parceiro",
-    dbGroup: "Comissão parceiro",
-    tipo: "COMISSAO",
-    badgeClass: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
-    textClass: "text-indigo-600 dark:text-indigo-400",
-  },
-  {
     id: "investimentos",
     label: "(-) Investimentos",
     dbGroup: "Investimentos",
@@ -295,6 +287,7 @@ function DashboardPage() {
   const [selectedServidor, setSelectedServidor] = useState<string>("todos");
   const [selectedCidade, setSelectedCidade] = useState<string>("todas");
   const [dreSearch, setDreSearch] = useState<string>("");
+  const [naturezaFilter, setNaturezaFilter] = useState<"todas" | "fixas" | "variaveis">("todas");
 
   // Expansão de Grupos na DRE (recolhidos por padrão para visual enxuto)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -397,6 +390,7 @@ function DashboardPage() {
         {
           name: string;
           sampleCode: string;
+          natureza: string;
           monthly: Record<string, number>;
           total: number;
         }
@@ -422,6 +416,7 @@ function DashboardPage() {
           accountsMap.set(accName, {
             name: accName,
             sampleCode: item.codigo_conta || "",
+            natureza: item.natureza || "Despesa Fixa",
             monthly: accM,
             total: 0,
           });
@@ -434,7 +429,14 @@ function DashboardPage() {
         accObj.total += debito;
       });
 
-      const allAccounts = Array.from(accountsMap.values()).sort((a, b) => b.total - a.total);
+      const allAccounts = Array.from(accountsMap.values())
+        .filter((acc) => {
+          if (naturezaFilter === "fixas") return (acc.natureza || "").includes("Fixa");
+          if (naturezaFilter === "variaveis") return (acc.natureza || "").includes("Vari");
+          return true;
+        })
+        .sort((a, b) => b.total - a.total);
+
       const filteredAccounts = dreSearch.trim()
         ? allAccounts.filter(
             (acc) =>
@@ -450,7 +452,7 @@ function DashboardPage() {
         accounts: filteredAccounts,
       };
     });
-  }, [filteredDreData, dreSearch]);
+  }, [filteredDreData, dreSearch, naturezaFilter]);
 
   // Lookup fácil dos totais de cada grupo por mês
   const groupTotalsMap = useMemo(() => {
@@ -513,9 +515,13 @@ function DashboardPage() {
   }, [margemContribMonthly, despesasOperacionaisMonthly]);
   const lucroLiquidoTotal = margemContribTotal - despesasOperacionaisTotal;
 
-  // Comissão Parceiro
-  const comissaoParceiroMonthly = groupTotalsMap["comissao_parceiro"]?.monthly || {};
-  const comissaoParceiroTotal = groupTotalsMap["comissao_parceiro"]?.total || 0;
+  // Comissão Parceiro (Cálculo a definir futuramente pelo gestor, valor mantido zerado/em branco)
+  const comissaoParceiroMonthly: Record<string, number> = useMemo(() => {
+    const m: Record<string, number> = {};
+    MONTH_KEYS.forEach((k) => (m[k] = 0));
+    return m;
+  }, []);
+  const comissaoParceiroTotal = 0;
 
   // (=) Distribuição do Lucro = Lucro Líquido - Comissão Parceiro
   const distribuicaoLucroMonthly = useMemo(() => {
@@ -549,24 +555,27 @@ function DashboardPage() {
       const trib = groupTotalsMap["tributos"]?.monthly[activeMonthKey] || 0;
       const despTot = adm + log + cartao + trib;
       const lucro = margem - despTot;
-      const comissao = comissaoParceiroMonthly[activeMonthKey] || 0;
+      const comissao = 0;
       const dist = lucro - comissao;
-      return { fat, cmv, avarias, margem, adm, log, cartao, trib, despTot, lucro, comissao, dist };
+      const fixas = adm + log;
+      const variaveis = avarias + cartao + trib;
+      return { fat, cmv, avarias, margem, adm, log, cartao, trib, despTot, lucro, comissao, dist, fixas, variaveis };
     } else {
-      return {
-        fat: faturamentoTotalAno,
-        cmv: cmvTotal,
-        avarias: avariasTotal,
-        margem: margemContribTotal,
-        adm: groupTotalsMap["desp_adm"]?.total || 0,
-        log: groupTotalsMap["desp_log"]?.total || 0,
-        cartao: groupTotalsMap["taxas_cartao"]?.total || 0,
-        trib: groupTotalsMap["tributos"]?.total || 0,
-        despTot: despesasOperacionaisTotal,
-        lucro: lucroLiquidoTotal,
-        comissao: comissaoParceiroTotal,
-        dist: distribuicaoLucroTotal,
-      };
+      const fat = faturamentoTotalAno;
+      const cmv = cmvTotal;
+      const avarias = avariasTotal;
+      const margem = margemContribTotal;
+      const adm = groupTotalsMap["desp_adm"]?.total || 0;
+      const log = groupTotalsMap["desp_log"]?.total || 0;
+      const cartao = groupTotalsMap["taxas_cartao"]?.total || 0;
+      const trib = groupTotalsMap["tributos"]?.total || 0;
+      const despTot = despesasOperacionaisTotal;
+      const lucro = lucroLiquidoTotal;
+      const comissao = 0;
+      const dist = distribuicaoLucroTotal;
+      const fixas = adm + log;
+      const variaveis = avarias + cartao + trib;
+      return { fat, cmv, avarias, margem, adm, log, cartao, trib, despTot, lucro, comissao, dist, fixas, variaveis };
     }
   }, [
     activeMonthKey,
@@ -574,14 +583,12 @@ function DashboardPage() {
     cmvMonthly,
     avariasMonthly,
     groupTotalsMap,
-    comissaoParceiroMonthly,
     faturamentoTotalAno,
     cmvTotal,
     avariasTotal,
     margemContribTotal,
     despesasOperacionaisTotal,
     lucroLiquidoTotal,
-    comissaoParceiroTotal,
     distribuicaoLucroTotal,
   ]);
 
@@ -890,11 +897,13 @@ function DashboardPage() {
               <div className="text-xl font-bold font-mono text-rose-600 dark:text-rose-400 mt-2">
                 {formatMoney(apuracaoValues.despTot)}
               </div>
-              <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-1">
-                Impacto:{" "}
-                <strong className="text-rose-600 dark:text-rose-400 font-mono">
-                  {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.despTot / apuracaoValues.fat) * 100) : "0.0%"}
-                </strong>
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1">
+                <span>
+                  Fixas: <strong className="text-foreground font-mono">{formatMoney(apuracaoValues.fixas)}</strong>
+                </span>
+                <span>
+                  Variáveis: <strong className="text-foreground font-mono">{formatMoney(apuracaoValues.variaveis)}</strong>
+                </span>
               </div>
             </Card>
 
@@ -928,7 +937,7 @@ function DashboardPage() {
             <Card className="p-4 rounded-xl border border-border bg-card shadow-sm col-span-2 sm:col-span-2 hover:border-primary/40 transition-all">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  (=) Distribuição do Lucro (Pós-Comissão Parceiro)
+                  (=) Distribuição do Lucro
                 </span>
                 <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
                   <Wallet className="h-4 w-4" />
@@ -943,11 +952,8 @@ function DashboardPage() {
                 {formatMoney(apuracaoValues.dist)}
               </div>
               <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1">
-                <span>
-                  Comissão Parceiro:{" "}
-                  <strong className="text-indigo-600 dark:text-indigo-400 font-mono">
-                    {formatMoney(apuracaoValues.comissao)}
-                  </strong>
+                <span className="text-muted-foreground">
+                  Comissão Parceiro: <strong className="text-muted-foreground/80 font-mono italic">A definir (R$ 0,00)</strong>
                 </span>
                 <span>
                   Retorno Efetivo:{" "}
@@ -1128,12 +1134,15 @@ function DashboardPage() {
 
               {/* 11. Comissão parceiro */}
               <div className="flex items-center justify-between p-2 text-muted-foreground hover:bg-muted/30">
-                <span className="font-sans">Comissão parceiro</span>
+                <div className="flex items-center gap-1.5 font-sans">
+                  <span>Comissão parceiro</span>
+                  <Badge variant="outline" className="text-[9px] py-0 px-1 border-muted-foreground/30 text-muted-foreground font-normal">
+                    a definir
+                  </Badge>
+                </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-indigo-600 dark:text-indigo-400">{formatMoney(apuracaoValues.comissao, true)}</span>
-                  <span className="w-14 text-right">
-                    {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.comissao / apuracaoValues.fat) * 100) : "0,0%"}
-                  </span>
+                  <span className="text-muted-foreground/60 italic">—</span>
+                  <span className="w-14 text-right text-muted-foreground/60">0,0%</span>
                 </div>
               </div>
 
@@ -1193,16 +1202,60 @@ function DashboardPage() {
         </div>
 
         {/* Campo de Busca Rápida de Contas */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="relative w-full max-w-sm">
-            <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
-            <Input
-              placeholder="Filtrar contas padronizadas..."
-              value={dreSearch}
-              onChange={(e) => setDreSearch(e.target.value)}
-              className="pl-8 h-8 text-xs rounded-lg bg-background border-border"
-            />
+        {/* Campo de Busca Rápida de Contas e Filtro de Natureza */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:w-64">
+              <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+              <Input
+                placeholder="Filtrar contas padronizadas..."
+                value={dreSearch}
+                onChange={(e) => setDreSearch(e.target.value)}
+                className="pl-8 h-8 text-xs rounded-lg bg-background border-border"
+              />
+            </div>
+
+            {/* Segmented control para Natureza Fixas / Variáveis */}
+            <div className="flex items-center bg-muted/50 p-0.5 rounded-lg border border-border text-xs">
+              <button
+                type="button"
+                onClick={() => setNaturezaFilter("todas")}
+                className={cn(
+                  "px-2.5 py-1 rounded-md text-[11px] font-medium transition-all",
+                  naturezaFilter === "todas"
+                    ? "bg-card text-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Todas
+              </button>
+              <button
+                type="button"
+                onClick={() => setNaturezaFilter("fixas")}
+                className={cn(
+                  "px-2.5 py-1 rounded-md text-[11px] font-medium transition-all",
+                  naturezaFilter === "fixas"
+                    ? "bg-card text-slate-700 dark:text-slate-300 shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Fixas
+              </button>
+              <button
+                type="button"
+                onClick={() => setNaturezaFilter("variaveis")}
+                className={cn(
+                  "px-2.5 py-1 rounded-md text-[11px] font-medium transition-all",
+                  naturezaFilter === "variaveis"
+                    ? "bg-card text-amber-700 dark:text-amber-300 shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Variáveis
+              </button>
+            </div>
           </div>
+
           <span className="text-[11px] text-muted-foreground hidden sm:inline">
             Exibindo dados padronizados de <strong className="text-foreground">{filteredDreData.length}</strong> registros
           </span>
@@ -1389,14 +1442,29 @@ function DashboardPage() {
                 </td>
               </tr>
 
-              {/* 11. COMISSÃO PARCEIRO (Expansível) */}
-              {renderGroupSection(
-                dreGroupsData.find((g) => g.id === "comissao_parceiro")!,
-                expandedGroups.has("comissao_parceiro"),
-                toggleGroup,
-                faturamentoTotalAno,
-                handleCellClick
-              )}
+              {/* 11. (-) COMISSÃO PARCEIRO (Cálculo a definir) */}
+              <tr className="bg-card/70 font-semibold text-muted-foreground hover:bg-muted/40 transition-colors">
+                <td className="py-2.5 px-4 font-sans min-w-[300px] max-w-[300px] sticky left-0 bg-card z-20 border-r border-border shadow-md">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-500/40 shrink-0" />
+                    <span className="text-foreground">(-) COMISSÃO PARCEIRO</span>
+                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-dashed border-indigo-500/40 text-indigo-500 font-mono">
+                      Cálculo a definir
+                    </Badge>
+                  </div>
+                </td>
+                {MONTH_KEYS.map((m) => (
+                  <td key={m} className="py-2.5 px-3 text-right font-mono text-muted-foreground/60">
+                    —
+                  </td>
+                ))}
+                <td className="py-2.5 px-4 text-right font-bold font-mono text-muted-foreground/60 bg-muted/30 border-l border-border">
+                  —
+                </td>
+                <td className="py-2.5 px-3 text-right font-medium text-muted-foreground/60 bg-muted/10 border-l border-border">
+                  0,0%
+                </td>
+              </tr>
 
               {/* ═══════════════════════════════════════════════════════════════════ */}
               {/* 12. (=) DISTRIBUIÇÃO DO LUCRO                                      */}
@@ -1747,6 +1815,7 @@ function renderGroupSection(
     accounts: Array<{
       name: string;
       sampleCode: string;
+      natureza?: string;
       monthly: Record<string, number>;
       total: number;
     }>;
@@ -1806,10 +1875,26 @@ function renderGroupSection(
                 className="py-2 px-4 pl-9 font-sans truncate min-w-[300px] max-w-[300px] sticky left-0 bg-card z-20 border-r border-border shadow-md"
                 title={`${acc.name} (ex: cód ${acc.sampleCode || "—"})`}
               >
-                {acc.sampleCode && (
-                  <span className="font-mono text-muted-foreground/60 mr-2 text-[10px]">[{acc.sampleCode}]</span>
-                )}
-                <span className="text-foreground/90 font-medium">{acc.name}</span>
+                <div className="flex items-center">
+                  {acc.natureza && (
+                    <span
+                      className={cn(
+                        "text-[9px] px-1 py-0.5 rounded font-mono font-medium mr-1.5 border shrink-0",
+                        acc.natureza.includes("Fixa")
+                          ? "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20"
+                          : acc.natureza.includes("Vari")
+                          ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
+                          : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
+                      )}
+                    >
+                      {acc.natureza.replace("Despesa ", "").replace("Custo ", "")}
+                    </span>
+                  )}
+                  {acc.sampleCode && (
+                    <span className="font-mono text-muted-foreground/60 mr-1.5 text-[10px]">[{acc.sampleCode}]</span>
+                  )}
+                  <span className="text-foreground/90 font-medium truncate">{acc.name}</span>
+                </div>
               </td>
               {MONTH_KEYS.map((m) => {
                 const val = acc.monthly[m];

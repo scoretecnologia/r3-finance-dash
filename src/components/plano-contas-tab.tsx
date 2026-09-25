@@ -47,6 +47,7 @@ export interface DeparaItem {
   tipo: string;
   ordem_grupo: number;
   ordem_conta: number;
+  natureza?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -88,13 +89,6 @@ export const DRE_GROUPS_CONFIG = [
     badgeClass: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
   },
   {
-    group: "Comissão parceiro",
-    label: "Comissão parceiro",
-    ordem: 8,
-    tipo: "COMISSAO",
-    badgeClass: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
-  },
-  {
     group: "Investimentos",
     label: "(-) Investimentos",
     ordem: 9,
@@ -110,10 +104,44 @@ export const DRE_GROUPS_CONFIG = [
   },
 ];
 
+export const NATUREZA_CONFIG = [
+  {
+    value: "Despesa Fixa",
+    label: "Despesa Fixa",
+    badgeClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+  },
+  {
+    value: "Despesa Variável",
+    label: "Despesa Variável",
+    badgeClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+  },
+  {
+    value: "Custo Fixo",
+    label: "Custo Fixo",
+    badgeClass: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20",
+  },
+  {
+    value: "Custo Variável",
+    label: "Custo Variável",
+    badgeClass: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
+  },
+  {
+    value: "Investimento",
+    label: "Investimento",
+    badgeClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+  },
+  {
+    value: "Não Operacional",
+    label: "Não Operacional",
+    badgeClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+  },
+];
+
 export function PlanoContasTab() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>("todos");
+  const [selectedNaturezaFilter, setSelectedNaturezaFilter] = useState<string>("todos");
   const [editItem, setEditItem] = useState<DeparaItem | null>(null);
   const [isNewOpen, setIsNewOpen] = useState(false);
   const [deleteConfirmItem, setDeleteConfirmItem] = useState<DeparaItem | null>(null);
@@ -122,6 +150,7 @@ export function PlanoContasTab() {
   const [formOrigem, setFormOrigem] = useState("");
   const [formPadrao, setFormPadrao] = useState("");
   const [formGrupo, setFormGrupo] = useState("Despesas Administrativas");
+  const [formNatureza, setFormNatureza] = useState("Despesa Fixa");
   const [formSubgrupo, setFormSubgrupo] = useState("");
   const [formUpdateHistorical, setFormUpdateHistorical] = useState(true);
 
@@ -145,6 +174,7 @@ export function PlanoContasTab() {
       origem: string;
       padrao: string;
       grupo: string;
+      natureza: string;
       subgrupo?: string;
       updateHistorical: boolean;
       existingId?: number;
@@ -168,6 +198,7 @@ export function PlanoContasTab() {
             conta_origem: cleanOrigem,
             conta_padronizada: cleanPadrao,
             grupo_dre: payload.grupo,
+            natureza: payload.natureza,
             subgrupo: cleanSub,
             tipo: groupConfig.tipo,
             ordem_grupo: groupConfig.ordem,
@@ -180,12 +211,12 @@ export function PlanoContasTab() {
 
       // 2. Se solicitado, atualiza o histórico no banco de dados para refletir na hora
       if (payload.updateHistorical) {
-        // Atualiza registros onde a descrição coincidir
         await supabase
           .from("grupo_r3_dre_detalhado" as never)
           .update({
             conta_padronizada: cleanPadrao,
             grupo_dre: payload.grupo,
+            natureza: payload.natureza,
           } as never)
           .ilike("descricao_conta", cleanOrigem);
       }
@@ -231,7 +262,6 @@ export function PlanoContasTab() {
       const rules = deparaQ.data ?? [];
       if (rules.length === 0) return 0;
 
-      // Executa updates em lotes para cada regra
       let updatedCount = 0;
       for (const rule of rules) {
         const { error } = await supabase
@@ -239,6 +269,7 @@ export function PlanoContasTab() {
           .update({
             conta_padronizada: rule.conta_padronizada,
             grupo_dre: rule.grupo_dre,
+            natureza: rule.natureza || "Despesa Fixa",
           } as never)
           .ilike("descricao_conta", rule.conta_origem);
         if (!error) updatedCount++;
@@ -262,26 +293,32 @@ export function PlanoContasTab() {
       list = list.filter((item) => item.grupo_dre === selectedGroupFilter);
     }
 
+    if (selectedNaturezaFilter !== "todos") {
+      list = list.filter((item) => (item.natureza || "Despesa Fixa") === selectedNaturezaFilter);
+    }
+
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(
         (item) =>
           item.conta_origem.toLowerCase().includes(q) ||
           item.conta_padronizada.toLowerCase().includes(q) ||
+          (item.natureza && item.natureza.toLowerCase().includes(q)) ||
           (item.subgrupo && item.subgrupo.toLowerCase().includes(q))
       );
     }
 
     return list;
-  }, [deparaQ.data, selectedGroupFilter, search]);
+  }, [deparaQ.data, selectedGroupFilter, selectedNaturezaFilter, search]);
 
-  // Contagem de Contas por Grupo
-  const groupStats = useMemo(() => {
-    const map = new Map<string, number>();
-    (deparaQ.data ?? []).forEach((item) => {
-      map.set(item.grupo_dre, (map.get(item.grupo_dre) || 0) + 1);
-    });
-    return map;
+  // Contagens por Natureza e Grupo
+  const naturezaStats = useMemo(() => {
+    const data = deparaQ.data ?? [];
+    const fixas = data.filter((i) => (i.natureza || "").includes("Fixa")).length;
+    const variaveis = data.filter((i) => (i.natureza || "").includes("Vari")).length;
+    const invest = data.filter((i) => i.natureza === "Investimento").length;
+    const naoOp = data.filter((i) => i.natureza === "Não Operacional").length;
+    return { fixas, variaveis, invest, naoOp, total: data.length };
   }, [deparaQ.data]);
 
   const handleOpenEdit = (item: DeparaItem) => {
@@ -289,6 +326,7 @@ export function PlanoContasTab() {
     setFormOrigem(item.conta_origem);
     setFormPadrao(item.conta_padronizada);
     setFormGrupo(item.grupo_dre);
+    setFormNatureza(item.natureza || "Despesa Fixa");
     setFormSubgrupo(item.subgrupo || "");
     setFormUpdateHistorical(true);
   };
@@ -298,6 +336,7 @@ export function PlanoContasTab() {
     setFormOrigem("");
     setFormPadrao("");
     setFormGrupo("Despesas Administrativas");
+    setFormNatureza("Despesa Fixa");
     setFormSubgrupo("");
     setFormUpdateHistorical(true);
     setIsNewOpen(true);
@@ -309,62 +348,79 @@ export function PlanoContasTab() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="p-4 rounded-xl border border-border/50 bg-card shadow-sm">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
-            Total de Regras De-Para
+            Total Regras De-Para
           </span>
           <div className="text-2xl font-bold font-mono text-foreground mt-1">
-            {deparaQ.data?.length || 0}
+            {naturezaStats.total}
           </div>
           <p className="text-[11px] text-muted-foreground mt-0.5">Mapeadas das lojas</p>
         </Card>
 
         <Card className="p-4 rounded-xl border border-border/50 bg-card shadow-sm">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
-            Despesas Adm.
-          </span>
-          <div className="text-2xl font-bold font-mono text-rose-600 dark:text-rose-400 mt-1">
-            {groupStats.get("Despesas Administrativas") || 0}
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Pessoal e operação</p>
-        </Card>
-
-        <Card className="p-4 rounded-xl border border-border/50 bg-card shadow-sm">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
-            Despesa Logística
+            Despesas Fixas
           </span>
           <div className="text-2xl font-bold font-mono text-blue-600 dark:text-blue-400 mt-1">
-            {groupStats.get("Despesa logistica") || 0}
+            {naturezaStats.fixas}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Frota, fretes e viagens</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Salários, ocupação, estrutura</p>
         </Card>
 
         <Card className="p-4 rounded-xl border border-border/50 bg-card shadow-sm">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
-            Taxas & Tributos
+            Despesas Variáveis
+          </span>
+          <div className="text-2xl font-bold font-mono text-amber-600 dark:text-amber-400 mt-1">
+            {naturezaStats.variaveis}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Cartão, tributos, comissões</p>
+        </Card>
+
+        <Card className="p-4 rounded-xl border border-border/50 bg-card shadow-sm">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
+            Invest. & Não Operacionais
           </span>
           <div className="text-2xl font-bold font-mono text-purple-600 dark:text-purple-400 mt-1">
-            {(groupStats.get("Taxas de cartão") || 0) + (groupStats.get("Tributos") || 0)}
+            {naturezaStats.invest + naturezaStats.naoOp}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Cartão, Pix e Impostos</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Reformas, sócios e ajustes</p>
         </Card>
       </div>
 
       {/* ── BARRA DE FERRAMENTAS & FILTROS ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex flex-1 items-center gap-3">
+        <div className="flex flex-1 flex-wrap items-center gap-3">
           {/* Busca */}
-          <div className="relative flex-1 max-w-md">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Buscar por termo original da loja ou nome padronizado..."
+              placeholder="Buscar por termo original, padronizado ou natureza..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-10 h-10 rounded-xl bg-card border-border/50 text-xs"
             />
           </div>
 
+          {/* Filtro por Natureza (Fixas vs Variáveis) */}
+          <Select value={selectedNaturezaFilter} onValueChange={setSelectedNaturezaFilter}>
+            <SelectTrigger className="w-[170px] h-10 rounded-xl bg-card border-border/50 text-xs">
+              <SelectValue placeholder="Natureza" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos" className="text-xs font-semibold text-primary">
+                Todas as Naturezas
+              </SelectItem>
+              {NATUREZA_CONFIG.map((n) => (
+                <SelectItem key={n.value} value={n.value} className="text-xs">
+                  {n.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           {/* Filtro por Grupo */}
           <Select value={selectedGroupFilter} onValueChange={setSelectedGroupFilter}>
-            <SelectTrigger className="w-[200px] h-10 rounded-xl bg-card border-border/50 text-xs">
+            <SelectTrigger className="w-[190px] h-10 rounded-xl bg-card border-border/50 text-xs">
               <SelectValue placeholder="Grupo DRE" />
             </SelectTrigger>
             <SelectContent>
@@ -388,7 +444,7 @@ export function PlanoContasTab() {
             onClick={() => syncAllHistoricalMutation.mutate()}
             disabled={syncAllHistoricalMutation.isPending}
             className="h-10 text-xs rounded-xl border-border/50 gap-1.5"
-            title="Atualiza todas as 17 mil linhas de DRE no banco com as regras atuais"
+            title="Atualiza todas as linhas de DRE no banco com as regras atuais e naturezas"
           >
             <RefreshCw
               className={cn("h-3.5 w-3.5", syncAllHistoricalMutation.isPending && "animate-spin")}
@@ -412,23 +468,24 @@ export function PlanoContasTab() {
           <table className="w-full text-xs text-left">
             <thead className="bg-muted/50 text-muted-foreground font-semibold uppercase tracking-wider border-b border-border/50">
               <tr>
-                <th className="py-3 px-4 min-w-[280px]">Termo no ERP (Nome Original)</th>
-                <th className="py-3 px-4 min-w-[220px]">Conta Padronizada (No DRE)</th>
-                <th className="py-3 px-4 min-w-[180px]">Grupo Gerencial DRE</th>
-                <th className="py-3 px-3 min-w-[120px]">Subgrupo</th>
-                <th className="py-3 px-3 text-right w-[100px]">Ações</th>
+                <th className="py-3 px-4 min-w-[260px]">Termo no ERP (Nome Original)</th>
+                <th className="py-3 px-4 min-w-[200px]">Conta Padronizada (No DRE)</th>
+                <th className="py-3 px-3 min-w-[140px]">Natureza (Fixa/Variável)</th>
+                <th className="py-3 px-4 min-w-[170px]">Grupo Gerencial DRE</th>
+                <th className="py-3 px-3 min-w-[110px]">Subgrupo</th>
+                <th className="py-3 px-3 text-right w-[90px]">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40">
               {deparaQ.isLoading ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={6} className="py-12 text-center text-muted-foreground">
                     Carregando regras de De-Para...
                   </td>
                 </tr>
               ) : filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={6} className="py-12 text-center text-muted-foreground">
                     Nenhuma regra encontrada para este filtro.
                   </td>
                 </tr>
@@ -436,6 +493,8 @@ export function PlanoContasTab() {
                 filteredList.map((item) => {
                   const groupConfig =
                     DRE_GROUPS_CONFIG.find((g) => g.group === item.grupo_dre) || DRE_GROUPS_CONFIG[1];
+                  const natConfig =
+                    NATUREZA_CONFIG.find((n) => n.value === item.natureza) || NATUREZA_CONFIG[0];
 
                   return (
                     <tr
@@ -444,7 +503,7 @@ export function PlanoContasTab() {
                     >
                       {/* Termo da Loja / ERP */}
                       <td className="py-2.5 px-4 font-mono font-medium text-foreground">
-                        <span className="px-2 py-0.5 rounded bg-muted text-[11px] border border-border/40 inline-block max-w-[320px] truncate" title={item.conta_origem}>
+                        <span className="px-2 py-0.5 rounded bg-muted text-[11px] border border-border/40 inline-block max-w-[300px] truncate" title={item.conta_origem}>
                           {item.conta_origem}
                         </span>
                       </td>
@@ -452,6 +511,16 @@ export function PlanoContasTab() {
                       {/* Nome Padronizado */}
                       <td className="py-2.5 px-4 font-sans font-semibold text-foreground">
                         {item.conta_padronizada}
+                      </td>
+
+                      {/* Natureza (Fixa vs Variável) */}
+                      <td className="py-2.5 px-3">
+                        <Badge
+                          variant="outline"
+                          className={cn("text-[10px] font-sans font-medium border", natConfig.badgeClass)}
+                        >
+                          {item.natureza || "Despesa Fixa"}
+                        </Badge>
                       </td>
 
                       {/* Grupo DRE */}
@@ -533,6 +602,7 @@ export function PlanoContasTab() {
                 origem: formOrigem,
                 padrao: formPadrao,
                 grupo: formGrupo,
+                natureza: formNatureza,
                 subgrupo: formSubgrupo,
                 updateHistorical: formUpdateHistorical,
                 existingId: editItem?.id,
@@ -593,7 +663,27 @@ export function PlanoContasTab() {
               </Select>
             </div>
 
-            {/* Campo 4: Subgrupo Opcional */}
+            {/* Campo 4: Natureza (Fixa vs Variável) */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-foreground flex items-center justify-between">
+                <span>Natureza do Gasto</span>
+                <span className="text-[10px] text-muted-foreground font-mono">fixa / variável</span>
+              </Label>
+              <Select value={formNatureza} onValueChange={setFormNatureza}>
+                <SelectTrigger className="w-full h-10 rounded-xl text-xs bg-background">
+                  <SelectValue placeholder="Selecione a natureza" />
+                </SelectTrigger>
+                <SelectContent>
+                  {NATUREZA_CONFIG.map((n) => (
+                    <SelectItem key={n.value} value={n.value} className="text-xs font-medium">
+                      {n.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Campo 5: Subgrupo Opcional */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-foreground">
                 Subgrupo / Classificação Interna (Opcional)
