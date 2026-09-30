@@ -152,7 +152,12 @@ function ConfiguracoesPage() {
       if (ctx?.prev) qc.setQueryData(["servidores"], ctx.prev);
       toast.error("Falha ao atualizar loja", { description: (err as Error).message });
     },
-    onSuccess: () => toast.success("Loja atualizada"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["servidores"] });
+      qc.invalidateQueries({ queryKey: ["dre-all"] });
+      qc.invalidateQueries({ queryKey: ["faturamento-all"] });
+      toast.success("Loja atualizada");
+    },
   });
 
   const updateSubloja = useMutation({
@@ -173,7 +178,12 @@ function ConfiguracoesPage() {
       if (ctx?.prev) qc.setQueryData(["sublojas"], ctx.prev);
       toast.error("Falha ao atualizar subloja", { description: (err as Error).message });
     },
-    onSuccess: () => toast.success("Subloja atualizada"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sublojas"] });
+      qc.invalidateQueries({ queryKey: ["dre-all"] });
+      qc.invalidateQueries({ queryKey: ["faturamento-all"] });
+      toast.success("Subloja atualizada");
+    },
   });
 
   const totalLojas = servidoresQ.data?.length ?? 0;

@@ -1,4 +1,4 @@
-import { useState, useMemo, Fragment } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/external";
@@ -283,20 +283,20 @@ function getRuleForStore(
 function DashboardPage() {
   // Queries Supabase
   const servidoresQ = useQuery({
-    queryKey: ["servidores-list"],
+    queryKey: ["servidores"],
     queryFn: async () => {
       const { data, error } = await supabase.from("grupo_r3_servidores" as never).select("*").order("nome");
       if (error) throw error;
-      return data as any[];
+      return (data ?? []) as any[];
     },
   });
 
   const sublojasQ = useQuery({
-    queryKey: ["sublojas-list"],
+    queryKey: ["sublojas"],
     queryFn: async () => {
       const { data, error } = await supabase.from("grupo_r3_sublojas" as never).select("*").order("nome");
       if (error) throw error;
-      return data as any[];
+      return (data ?? []) as any[];
     },
   });
 
@@ -305,7 +305,7 @@ function DashboardPage() {
     queryFn: async () => {
       const { data, error } = await supabase.from("grupo_r3_faturamento_loja" as never).select("*");
       if (error) throw error;
-      return data as any[];
+      return (data ?? []) as any[];
     },
   });
 
@@ -314,7 +314,7 @@ function DashboardPage() {
     queryFn: async () => {
       const { data, error } = await supabase.from("grupo_r3_dre_detalhado" as never).select("*");
       if (error) throw error;
-      return data as any[];
+      return (data ?? []) as any[];
     },
   });
 
@@ -340,22 +340,55 @@ function DashboardPage() {
     },
   });
 
-  const isLoading = faturamentoQ.isLoading || dreQ.isLoading || parceirosRegrasQ.isLoading;
+  const isLoading =
+    faturamentoQ.isLoading ||
+    dreQ.isLoading ||
+    parceirosRegrasQ.isLoading ||
+    servidoresQ.isLoading ||
+    sublojasQ.isLoading;
 
-  // Anos disponíveis nos dados
+  // Lojas Matrizes e Filiais Ativas (conforme módulo de Configurações)
+  const activeServidores = useMemo(
+    () => (servidoresQ.data ?? []).filter((s) => s.ativo),
+    [servidoresQ.data]
+  );
+
+  const activeServidorIds = useMemo(
+    () => new Set(activeServidores.map((s) => Number(s.servidor_id))),
+    [activeServidores]
+  );
+
+  const activeSublojas = useMemo(
+    () =>
+      (sublojasQ.data ?? []).filter(
+        (s) => s.ativo && activeServidorIds.has(Number(s.servidor_id))
+      ),
+    [sublojasQ.data, activeServidorIds]
+  );
+
+  const activeSublojaIds = useMemo(
+    () => new Set(activeSublojas.map((s) => Number(s.cidade_id))),
+    [activeSublojas]
+  );
+
+  // Anos disponíveis nos dados (apenas considerando lojas e sublojas ativas)
   const availableYears = useMemo(() => {
     const setY = new Set<string>();
     (faturamentoQ.data ?? []).forEach((item) => {
+      if (item.id_servidor && !activeServidorIds.has(Number(item.id_servidor))) return;
+      if (item.id_cidade && !activeSublojaIds.has(Number(item.id_cidade))) return;
       const y = extractYearStr(item.mes_inicio);
       if (y) setY.add(y);
     });
     (dreQ.data ?? []).forEach((item) => {
+      if (item.id_servidor && !activeServidorIds.has(Number(item.id_servidor))) return;
+      if (item.id_cidade && !activeSublojaIds.has(Number(item.id_cidade))) return;
       const y = extractYearStr(item.mes_inicio);
       if (y) setY.add(y);
     });
     const list = Array.from(setY).sort().reverse();
     return list.length > 0 ? list : ["2026", "2025"];
-  }, [faturamentoQ.data, dreQ.data]);
+  }, [faturamentoQ.data, dreQ.data, activeServidorIds, activeSublojaIds]);
 
   // Filtros Globais
   const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
@@ -365,6 +398,23 @@ function DashboardPage() {
   const [selectedCidades, setSelectedCidades] = useState<string[]>([]);
   const [dreSearch, setDreSearch] = useState<string>("");
   const [naturezaFilter, setNaturezaFilter] = useState<"todas" | "fixas" | "variaveis">("todas");
+
+  // Limpeza de seleções caso a loja/filial tenha sido inativada nas configurações
+  useEffect(() => {
+    if (selectedServidores.length > 0) {
+      setSelectedServidores((prev) =>
+        prev.filter((id) => activeServidorIds.has(Number(id)))
+      );
+    }
+  }, [activeServidorIds]);
+
+  useEffect(() => {
+    if (selectedCidades.length > 0) {
+      setSelectedCidades((prev) =>
+        prev.filter((id) => activeSublojaIds.has(Number(id)))
+      );
+    }
+  }, [activeSublojaIds]);
 
   // Expansão de Grupos na DRE (recolhidos por padrão para visual enxuto)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -389,19 +439,19 @@ function DashboardPage() {
     setExpandedGroups(new Set());
   };
 
-  // Filiais filtradas pelas matrizes selecionadas
+  // Filiais ativas filtradas pelas matrizes selecionadas
   const filteredSublojas = useMemo(() => {
-    if (selectedServidores.length === 0) return sublojasQ.data ?? [];
-    const set = new Set(selectedServidores);
-    return (sublojasQ.data ?? []).filter((s) => set.has(String(s.servidor_id)));
-  }, [sublojasQ.data, selectedServidores]);
+    if (selectedServidores.length === 0) return activeSublojas;
+    const set = new Set(selectedServidores.map(Number));
+    return activeSublojas.filter((s) => set.has(Number(s.servidor_id)));
+  }, [activeSublojas, selectedServidores]);
 
-  // Ao mudar as matrizes, mantém apenas as filiais que ainda pertencem à seleção
+  // Ao mudar as matrizes, mantém apenas as filiais ativas que ainda pertencem à seleção
   const handleServidoresChange = (values: string[]) => {
     setSelectedServidores(values);
     if (values.length === 0) return;
     const allowed = new Set(
-      (sublojasQ.data ?? [])
+      activeSublojas
         .filter((s) => values.includes(String(s.servidor_id)))
         .map((s) => String(s.cidade_id))
     );
@@ -410,11 +460,11 @@ function DashboardPage() {
 
   const servidorOptions = useMemo(
     () =>
-      (servidoresQ.data ?? []).map((s) => ({
+      activeServidores.map((s) => ({
         value: String(s.servidor_id),
         label: s.nome || `Servidor ${s.servidor_id}`,
       })),
-    [servidoresQ.data]
+    [activeServidores]
   );
   const sublojaOptions = useMemo(
     () => filteredSublojas.map((s) => ({ value: String(s.cidade_id), label: s.nome || `Cidade ${s.cidade_id}` })),
@@ -434,23 +484,35 @@ function DashboardPage() {
   // Nome das lojas / cidades selecionadas para exibição no card de Apuração
   const selectedScopeLabel = useMemo(() => {
     const srvNames = selectedServidores.map((id) => {
-      const srv = (servidoresQ.data ?? []).find((s) => String(s.servidor_id) === id);
+      const srv = activeServidores.find((s) => String(s.servidor_id) === id);
       return srv?.nome || `Servidor ${id}`;
     });
     const cidNames = selectedCidades.map((id) => {
-      const sub = (sublojasQ.data ?? []).find((s) => String(s.cidade_id) === id);
+      const sub = activeSublojas.find((s) => String(s.cidade_id) === id);
       return sub?.nome || `Cidade ${id}`;
     });
-    if (srvNames.length === 0 && cidNames.length === 0) return "Todas as Lojas (Consolidado Grupo R3)";
+    if (srvNames.length === 0 && cidNames.length === 0) return "Todas as Lojas Ativas (Consolidado Grupo R3)";
     const parts: string[] = [];
     if (srvNames.length > 0) parts.push(srvNames.join(", "));
     if (cidNames.length > 0) parts.push(cidNames.join(", "));
     return parts.join(" — ");
-  }, [selectedServidores, selectedCidades, servidoresQ.data, sublojasQ.data]);
+  }, [selectedServidores, selectedCidades, activeServidores, activeSublojas]);
 
   // --- FILTRAGEM BASE DOS DADOS PELOS FILTROS SELECIONADOS ---
   const filteredFatData = useMemo(() => {
     let list = faturamentoQ.data ?? [];
+
+    // Ignora dados de lojas/servidores ou sublojas inativas nas configurações
+    list = list.filter((item) => {
+      if (item.id_servidor && !activeServidorIds.has(Number(item.id_servidor))) {
+        return false;
+      }
+      if (item.id_cidade && !activeSublojaIds.has(Number(item.id_cidade))) {
+        return false;
+      }
+      return true;
+    });
+
     if (selectedYear !== "todos") {
       list = list.filter((item) => extractYearStr(item.mes_inicio) === selectedYear);
     }
@@ -467,10 +529,22 @@ function DashboardPage() {
       list = list.filter((item) => set.has(String(item.id_cidade)));
     }
     return list;
-  }, [faturamentoQ.data, selectedYear, selectedMonths, selectedServidores, selectedCidades]);
+  }, [faturamentoQ.data, activeServidorIds, activeSublojaIds, selectedYear, selectedMonths, selectedServidores, selectedCidades]);
 
   const filteredDreData = useMemo(() => {
     let list = dreQ.data ?? [];
+
+    // Ignora dados de lojas/servidores ou sublojas inativas nas configurações
+    list = list.filter((item) => {
+      if (item.id_servidor && !activeServidorIds.has(Number(item.id_servidor))) {
+        return false;
+      }
+      if (item.id_cidade && !activeSublojaIds.has(Number(item.id_cidade))) {
+        return false;
+      }
+      return true;
+    });
+
     if (selectedYear !== "todos") {
       list = list.filter((item) => extractYearStr(item.mes_inicio) === selectedYear);
     }
@@ -487,7 +561,7 @@ function DashboardPage() {
       list = list.filter((item) => set.has(String(item.id_cidade)));
     }
     return list;
-  }, [dreQ.data, selectedYear, selectedMonths, selectedServidores, selectedCidades]);
+  }, [dreQ.data, activeServidorIds, activeSublojaIds, selectedYear, selectedMonths, selectedServidores, selectedCidades]);
 
   // --- MAPEAMENTO MATRICIAL MENSAL (12 MESES: JAN a DEZ) ---
   // 1. Faturamento por Mês
@@ -1090,6 +1164,8 @@ function DashboardPage() {
             variant="outline"
             size="sm"
             onClick={() => {
+              servidoresQ.refetch();
+              sublojasQ.refetch();
               faturamentoQ.refetch();
               dreQ.refetch();
             }}
