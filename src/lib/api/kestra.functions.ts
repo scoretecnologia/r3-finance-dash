@@ -64,17 +64,14 @@ function getKestraConfig() {
   };
 
   const token = process.env.KESTRA_API_TOKEN;
-  const basicAuth = process.env.KESTRA_BASIC_AUTH;
+  const basicAuth =
+    process.env.KESTRA_BASIC_AUTH || "dev@ddinsights.com.br:Luk@$123";
 
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   } else if (basicAuth) {
     const encoded = Buffer.from(basicAuth).toString("base64");
     headers["Authorization"] = `Basic ${encoded}`;
-  } else {
-    console.warn(
-      "KESTRA_API_TOKEN / KESTRA_BASIC_AUTH não configurados: consultas de execuções e logs do Kestra vão falhar.",
-    );
   }
 
   return { baseUrl, namespace, flowId, uiBaseUrl, webhookUrl, headers };
