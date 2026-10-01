@@ -59,6 +59,11 @@ interface TriggerSyncDialogProps {
   initialCidadeId?: number | null;
 }
 
+function getCurrentMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export function TriggerSyncDialog({
   open,
   onOpenChange,
@@ -70,10 +75,7 @@ export function TriggerSyncDialog({
   const [selectedServidor, setSelectedServidor] = useState<string>("TODOS");
   const [selectedCidade, setSelectedCidade] = useState<string>("TODAS");
   const [cargaTipo, setCargaTipo] = useState<"atual" | "mes" | "full">("atual");
-  const [mesReferencia, setMesReferencia] = useState<string>(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const [mesReferencia, setMesReferencia] = useState<string>(() => getCurrentMonth());
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -117,7 +119,11 @@ export function TriggerSyncDialog({
 
     try {
       const isFull = cargaTipo === "full";
-      const mes = cargaTipo === "mes" ? mesReferencia : "";
+      // "Mês Atual" precisa ir explícito: se mes_referencia for vazio, o ETL usa a
+      // configuração de cada loja no banco (carga_completa / mes_referencia), o que
+      // fazia a opção "Mês Atual" rodar a carga full.
+      const mes =
+        cargaTipo === "mes" ? mesReferencia : cargaTipo === "atual" ? getCurrentMonth() : "";
 
       const res = await triggerKestraSync({
         data: {

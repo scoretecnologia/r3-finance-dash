@@ -184,7 +184,9 @@ export function PlanoContasTab() {
       const groupConfig =
         DRE_GROUPS_CONFIG.find((g) => g.group === payload.grupo) || DRE_GROUPS_CONFIG[1];
 
-      const cleanOrigem = payload.origem.trim().toUpperCase();
+      // Mesma normalização do ETL (dre_to_parquet.py / normalizar_descricao):
+      // espaços múltiplos viram um só, trim e maiúsculas.
+      const cleanOrigem = payload.origem.replace(/\s+/g, " ").trim().toUpperCase();
       const cleanPadrao = payload.padrao.trim();
       const cleanSub = payload.subgrupo?.trim() || null;
 
