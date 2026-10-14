@@ -309,7 +309,7 @@ export function ParceirosTab() {
             <span className="text-[11px] font-semibold text-muted-foreground uppercase">Total Parceiros</span>
             <Users className="h-4 w-4 text-primary/70" />
           </div>
-          <div className="text-2xl font-bold font-mono text-foreground mt-1">
+          <div className="text-2xl font-bold tabular-nums text-foreground mt-1">
             {uniquePartners.length}
           </div>
           <span className="text-[10px] text-muted-foreground">Parceiros cadastrados</span>
@@ -318,9 +318,9 @@ export function ParceirosTab() {
         <Card className="p-3.5 rounded-xl border border-border bg-card shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-muted-foreground uppercase">Lojas Vinculadas</span>
-            <Store className="h-4 w-4 text-blue-500/70" />
+            <Store className="h-4 w-4 text-chart-line/70" />
           </div>
-          <div className="text-2xl font-bold font-mono text-blue-600 dark:text-blue-400 mt-1">
+          <div className="text-2xl font-bold tabular-nums text-chart-line mt-1">
             {regrasQ.data?.length ?? 0}
           </div>
           <span className="text-[10px] text-muted-foreground">Regras ativas no sistema</span>
@@ -329,9 +329,9 @@ export function ParceirosTab() {
         <Card className="p-3.5 rounded-xl border border-border bg-card shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-muted-foreground uppercase">Comissão Padrão</span>
-            <Percent className="h-4 w-4 text-emerald-500/70" />
+            <Percent className="h-4 w-4 text-primary/70" />
           </div>
-          <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1">
+          <div className="text-2xl font-bold tabular-nums text-primary mt-1">
             25,0%
           </div>
           <span className="text-[10px] text-muted-foreground">Alíquota da maioria</span>
@@ -340,9 +340,9 @@ export function ParceirosTab() {
         <Card className="p-3.5 rounded-xl border border-border bg-card shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-muted-foreground uppercase">Diferenciados</span>
-            <Sparkles className="h-4 w-4 text-amber-500/70" />
+            <Sparkles className="h-4 w-4 text-chart-amber/70" />
           </div>
-          <div className="text-2xl font-bold font-mono text-amber-600 dark:text-amber-400 mt-1">
+          <div className="text-2xl font-bold tabular-nums text-chart-amber mt-1">
             {(regrasQ.data ?? []).filter((r) => Number(r.percentual_comissao) !== 25).length}
           </div>
           <span className="text-[10px] text-muted-foreground">Alíquotas especiais (ex: 30%)</span>
@@ -394,7 +394,7 @@ export function ParceirosTab() {
       </div>
 
       {/* Tabela de Vínculos de Parceiros */}
-      <Card className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+      <Card className="rounded-xl bg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left whitespace-nowrap border-collapse">
             <thead className="bg-muted/50 border-b border-border text-muted-foreground font-semibold uppercase tracking-wider text-[11px]">
@@ -436,7 +436,7 @@ export function ParceirosTab() {
                         <Store className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                         <span>{regra.servidor_nome}</span>
                         {regra.servidor_id && (
-                          <span className="text-[10px] text-muted-foreground font-mono">
+                          <span className="text-[10px] text-muted-foreground tabular-nums">
                             (#{regra.servidor_id})
                           </span>
                         )}
@@ -448,23 +448,23 @@ export function ParceirosTab() {
 
                   <td className="py-3 px-4">
                     {regra.cidade_nome ? (
-                      <Badge variant="outline" className="gap-1 border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/10">
+                      <Badge variant="outline" className="gap-1 border-chart-line/30 text-chart-line bg-chart-line/10">
                         <MapPin className="h-3 w-3" />
                         <span>{regra.cidade_nome}</span>
-                        {regra.cidade_id && <span className="font-mono text-[9px] opacity-75">#{regra.cidade_id}</span>}
+                        {regra.cidade_id && <span className="tabular-nums text-[9px] opacity-75">#{regra.cidade_id}</span>}
                       </Badge>
                     ) : (
                       <span className="text-muted-foreground text-[11px]">Toda a Matriz</span>
                     )}
                   </td>
 
-                  <td className="py-3 px-4 text-center font-mono font-bold">
+                  <td className="py-3 px-4 text-center tabular-nums font-bold">
                     <span
                       className={cn(
                         "px-2 py-0.5 rounded-md text-xs",
                         Number(regra.percentual_comissao) > 25
-                          ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 font-extrabold"
-                          : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                          ? "bg-chart-amber/15 text-chart-amber font-extrabold"
+                          : "bg-primary/10 text-primary"
                       )}
                     >
                       {Number(regra.percentual_comissao).toFixed(2)}%
@@ -604,7 +604,7 @@ export function ParceirosTab() {
                     max="100"
                     value={formPercentual}
                     onChange={(e) => setFormPercentual(e.target.value)}
-                    className="h-9 text-xs rounded-lg pr-8 font-mono font-bold"
+                    className="h-9 text-xs rounded-lg pr-8 tabular-nums font-bold"
                     required
                   />
                   <span className="absolute right-3 top-2.5 text-xs text-muted-foreground font-bold">%</span>
@@ -654,9 +654,9 @@ export function ParceirosTab() {
         open={!!deleteConfirmItem}
         onOpenChange={(open) => !open && setDeleteConfirmItem(null)}
       >
-        <DialogContent className="max-w-sm rounded-2xl">
+        <DialogContent className="max-w-sm rounded-xl">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2">
+            <DialogTitle className="text-base font-bold text-chart-amber flex items-center gap-2">
               <AlertCircle className="h-5 w-5" /> Inativar Vínculo de Parceiro?
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground mt-2">
@@ -686,7 +686,7 @@ export function ParceirosTab() {
               onClick={() => {
                 if (deleteConfirmItem?.id) inativarMutation.mutate(deleteConfirmItem.id);
               }}
-              className="text-xs rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-medium"
+              className="text-xs rounded-xl bg-chart-amber hover:bg-chart-amber text-white font-medium"
             >
               {inativarMutation.isPending ? "Inativando..." : "Confirmar Inativação"}
             </Button>

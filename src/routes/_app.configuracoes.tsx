@@ -191,7 +191,7 @@ function ConfiguracoesPage() {
   const ativasLojas = servidoresQ.data?.filter((s) => s.ativo).length ?? 0;
 
   return (
-    <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
       <Tabs defaultValue="lojas" className="space-y-6">
         {/* Page header with tabs navigation */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-border/40">
@@ -200,7 +200,7 @@ function ConfiguracoesPage() {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
                 <Database className="h-4 w-4 text-primary" />
               </div>
-              <h1 className="text-2xl font-bold tracking-tight">Configurações do Sistema</h1>
+              <h1 className="text-lg font-extrabold tracking-tight text-foreground">Configurações do Sistema</h1>
             </div>
             <p className="text-sm text-muted-foreground ml-[42px]">
               Gerencie os parâmetros de sincronização das lojas e o plano de contas gerencial da DRE.
@@ -241,7 +241,7 @@ function ConfiguracoesPage() {
                 setSyncCidadeId(null);
                 setSyncDialogOpen(true);
               }}
-              className="rounded-xl h-9 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 gap-1.5 transition-all"
+              className="rounded-xl h-9 text-xs font-semibold bg-primary hover:bg-primary text-white shadow-md shadow-primary/20 gap-1.5 transition-all"
             >
               <Play className="h-3.5 w-3.5 fill-current" />
               Executar Sincronização
@@ -373,7 +373,7 @@ function ConfiguracoesPage() {
                         </button>
                         <Badge
                           variant="secondary"
-                          className="font-mono text-[10px] rounded-md bg-muted/80 border-0"
+                          className="tabular-nums text-[10px] rounded-md bg-muted/80 border-0"
                         >
                           #{srv.servidor_id}
                         </Badge>
@@ -455,7 +455,7 @@ function ConfiguracoesPage() {
                                 </button>
                                 <Badge
                                   variant="secondary"
-                                  className="font-mono text-[10px] rounded-md bg-muted/80 border-0"
+                                  className="tabular-nums text-[10px] rounded-md bg-muted/80 border-0"
                                 >
                                   #{sl.cidade_id}
                                 </Badge>
@@ -565,7 +565,7 @@ function RowControls({
           variant="outline"
           size="sm"
           onClick={onExecute}
-          className="h-8 px-2.5 rounded-lg text-xs font-semibold text-emerald-600 hover:text-emerald-700 border-emerald-500/30 hover:border-emerald-500/60 bg-emerald-50/50 dark:bg-emerald-950/20 hover:bg-emerald-100/50 gap-1.5 transition-all shadow-xs"
+          className="h-8 px-2.5 rounded-lg text-xs font-semibold text-primary hover:text-primary border-primary/30 hover:border-primary/60 bg-primary/50 hover:bg-primary/50 gap-1.5 transition-all shadow-xs"
           title="Executar sincronização para esta loja"
         >
           <Play className="h-3 w-3 fill-current" />
@@ -604,7 +604,7 @@ function NovaLojaDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset(); }}>
-      <DialogContent className="rounded-2xl border-border/40">
+      <DialogContent className="rounded-xl border-border/40">
         <DialogHeader>
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 mb-2">
             <Store className="h-5 w-5 text-primary" />
@@ -667,7 +667,7 @@ function NovaSublojaDialog({ open, onOpenChange, servidores }: {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset(); }}>
-      <DialogContent className="rounded-2xl border-border/40">
+      <DialogContent className="rounded-xl border-border/40">
         <DialogHeader>
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 mb-2">
             <MapPin className="h-5 w-5 text-primary" />
@@ -810,7 +810,7 @@ function EditarNomeDialog({
 
   return (
     <Dialog open={Boolean(target)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[420px] rounded-2xl border-border/40 shadow-xl p-6">
+      <DialogContent className="sm:max-w-[420px] rounded-xl border-border/40 shadow-xl p-6">
         <form onSubmit={handleSubmit}>
           <DialogHeader className="space-y-1.5 mb-4">
             <div className="flex items-center gap-2">

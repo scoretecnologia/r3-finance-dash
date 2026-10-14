@@ -157,7 +157,7 @@ export function TriggerSyncDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px] rounded-2xl border-border/40 shadow-2xl p-6">
+      <DialogContent className="sm:max-w-[480px] rounded-xl border-border/40 shadow-2xl p-6">
         <DialogHeader className="space-y-2">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -222,7 +222,7 @@ export function TriggerSyncDialog({
           {/* 2. Tipo de Execução */}
           <div className="space-y-2">
             <Label className="text-xs font-semibold flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-amber-500" /> Período da Carga
+              <Sparkles className="h-3.5 w-3.5 text-chart-amber" /> Período da Carga
             </Label>
             <div className="grid grid-cols-3 gap-2">
               <button
@@ -259,7 +259,7 @@ export function TriggerSyncDialog({
                 className={cn(
                   "p-2.5 rounded-xl border text-xs font-medium flex flex-col items-center justify-center gap-1 transition-all text-center",
                   cargaTipo === "full"
-                    ? "border-amber-500 bg-amber-500/10 text-amber-600 dark:text-amber-400 shadow-sm"
+                    ? "border-chart-amber bg-chart-amber/10 text-chart-amber shadow-sm"
                     : "border-border/50 hover:border-border text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -282,7 +282,7 @@ export function TriggerSyncDialog({
 
           {/* Alerta de Carga Completa */}
           {cargaTipo === "full" && (
-            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300 animate-fade-in">
+            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-chart-amber/10 border border-chart-amber/20 text-xs text-chart-amber animate-fade-in">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
               <span>
                 A <strong>Carga Completa</strong> processará todo o histórico mês a mês a partir de janeiro de 2025. Esse processo pode levar alguns minutos no Kestra.
@@ -299,7 +299,7 @@ export function TriggerSyncDialog({
 
           {/* Feedback de Sucesso */}
           {success && (
-            <div className="space-y-2 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-medium animate-fade-in">
+            <div className="space-y-2 p-3.5 rounded-xl bg-primary/10 border border-primary/20 text-primary text-xs font-medium animate-fade-in">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 <span>Fluxo disparado com sucesso! O Kestra já iniciou a extração.</span>
@@ -308,7 +308,7 @@ export function TriggerSyncDialog({
                 <Link
                   to="/logs"
                   onClick={() => onOpenChange(false)}
-                  className="inline-flex items-center gap-1.5 font-bold text-emerald-700 dark:text-emerald-300 underline underline-offset-4 hover:opacity-80"
+                  className="inline-flex items-center gap-1.5 font-bold text-primary underline underline-offset-4 hover:opacity-80"
                 >
                   <Terminal className="h-3.5 w-3.5" />
                   Acompanhar Console na aba de Logs &rarr;

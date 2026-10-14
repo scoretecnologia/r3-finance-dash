@@ -16,6 +16,7 @@ import { Route as AppApuracaoRouteImport } from './routes/_app.apuracao'
 import { Route as AppCatalogoRouteImport } from './routes/_app.catalogo'
 import { Route as AppCatalogoTabelaRouteImport } from './routes/_app.catalogo-tabela'
 import { Route as AppConfiguracoesRouteImport } from './routes/_app.configuracoes'
+import { Route as AppDreRouteImport } from './routes/_app.dre'
 import { Route as AppLogsRouteImport } from './routes/_app.logs'
 
 const AppRoute = AppRouteImport.update({
@@ -52,6 +53,11 @@ const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
   path: '/configuracoes',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDreRoute = AppDreRouteImport.update({
+  id: '/dre',
+  path: '/dre',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppLogsRoute = AppLogsRouteImport.update({
   id: '/logs',
   path: '/logs',
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/catalogo': typeof AppCatalogoRoute
   '/catalogo-tabela': typeof AppCatalogoTabelaRoute
   '/configuracoes': typeof AppConfiguracoesRoute
+  '/dre': typeof AppDreRoute
   '/logs': typeof AppLogsRoute
 }
 export interface FileRoutesByTo {
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/catalogo': typeof AppCatalogoRoute
   '/catalogo-tabela': typeof AppCatalogoTabelaRoute
   '/configuracoes': typeof AppConfiguracoesRoute
+  '/dre': typeof AppDreRoute
   '/logs': typeof AppLogsRoute
   '/': typeof AppIndexRoute
 }
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/_app/catalogo': typeof AppCatalogoRoute
   '/_app/catalogo-tabela': typeof AppCatalogoTabelaRoute
   '/_app/configuracoes': typeof AppConfiguracoesRoute
+  '/_app/dre': typeof AppDreRoute
   '/_app/logs': typeof AppLogsRoute
   '/_app/': typeof AppIndexRoute
 }
@@ -96,6 +105,7 @@ export interface FileRouteTypes {
     | '/catalogo'
     | '/catalogo-tabela'
     | '/configuracoes'
+    | '/dre'
     | '/logs'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -104,6 +114,7 @@ export interface FileRouteTypes {
     | '/catalogo'
     | '/catalogo-tabela'
     | '/configuracoes'
+    | '/dre'
     | '/logs'
     | '/'
   id:
@@ -114,6 +125,7 @@ export interface FileRouteTypes {
     | '/_app/catalogo'
     | '/_app/catalogo-tabela'
     | '/_app/configuracoes'
+    | '/_app/dre'
     | '/_app/logs'
     | '/_app/'
   fileRoutesById: FileRoutesById
@@ -174,6 +186,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppConfiguracoesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/dre': {
+      id: '/_app/dre'
+      path: '/dre'
+      fullPath: '/dre'
+      preLoaderRoute: typeof AppDreRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/logs': {
       id: '/_app/logs'
       path: '/logs'
@@ -189,6 +208,7 @@ interface AppRouteChildren {
   AppCatalogoRoute: typeof AppCatalogoRoute
   AppCatalogoTabelaRoute: typeof AppCatalogoTabelaRoute
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
+  AppDreRoute: typeof AppDreRoute
   AppLogsRoute: typeof AppLogsRoute
   AppIndexRoute: typeof AppIndexRoute
 }
@@ -198,6 +218,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCatalogoRoute: AppCatalogoRoute,
   AppCatalogoTabelaRoute: AppCatalogoTabelaRoute,
   AppConfiguracoesRoute: AppConfiguracoesRoute,
+  AppDreRoute: AppDreRoute,
   AppLogsRoute: AppLogsRoute,
   AppIndexRoute: AppIndexRoute,
 }

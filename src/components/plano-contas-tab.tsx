@@ -59,49 +59,49 @@ export const DRE_GROUPS_CONFIG = [
     label: "(-) Avarias",
     ordem: 3,
     tipo: "DEDUCAO",
-    badgeClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    badgeClass: "bg-chart-amber/10 text-chart-amber border-chart-amber/20",
   },
   {
     group: "Despesas Administrativas",
     label: "(-) Despesas Administrativas",
     ordem: 4,
     tipo: "DESPESA",
-    badgeClass: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
+    badgeClass: "bg-destructive/10 text-destructive border-destructive/20",
   },
   {
     group: "Despesa logistica",
     label: "(-) Despesa logística",
     ordem: 5,
     tipo: "DESPESA",
-    badgeClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+    badgeClass: "bg-chart-line/10 text-chart-line border-chart-line/20",
   },
   {
     group: "Taxas de cartão",
     label: "(-) Taxas de cartão",
     ordem: 6,
     tipo: "DESPESA",
-    badgeClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+    badgeClass: "bg-chart-line/10 text-chart-line border-chart-line/20",
   },
   {
     group: "Tributos",
     label: "(-) Tributos",
     ordem: 7,
     tipo: "DESPESA",
-    badgeClass: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
+    badgeClass: "bg-chart-amber/10 text-chart-amber border-chart-amber/20",
   },
   {
     group: "Investimentos",
     label: "(-) Investimentos",
     ordem: 9,
     tipo: "INVESTIMENTO",
-    badgeClass: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20",
+    badgeClass: "bg-chart-blue/10 text-chart-blue border-chart-blue/20",
   },
   {
     group: "Outras / Não Operacionais",
     label: "(-) Outras / Não Operacionais",
     ordem: 10,
     tipo: "NAO_OPERACIONAL",
-    badgeClass: "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20",
+    badgeClass: "bg-muted/10 text-muted-foreground border-border/20",
   },
 ];
 
@@ -109,32 +109,32 @@ export const NATUREZA_CONFIG = [
   {
     value: "Despesa Fixa",
     label: "Despesa Fixa",
-    badgeClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+    badgeClass: "bg-chart-line/10 text-chart-line border-chart-line/20",
   },
   {
     value: "Despesa Variável",
     label: "Despesa Variável",
-    badgeClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    badgeClass: "bg-chart-amber/10 text-chart-amber border-chart-amber/20",
   },
   {
     value: "Custo Fixo",
     label: "Custo Fixo",
-    badgeClass: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20",
+    badgeClass: "bg-chart-blue/10 text-chart-blue border-chart-blue/20",
   },
   {
     value: "Custo Variável",
     label: "Custo Variável",
-    badgeClass: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
+    badgeClass: "bg-chart-amber/10 text-chart-amber border-chart-amber/20",
   },
   {
     value: "Investimento",
     label: "Investimento",
-    badgeClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+    badgeClass: "bg-primary/10 text-primary border-primary/20",
   },
   {
     value: "Não Operacional",
     label: "Não Operacional",
-    badgeClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+    badgeClass: "bg-chart-line/10 text-chart-line border-chart-line/20",
   },
 ];
 
@@ -381,7 +381,7 @@ export function PlanoContasTab() {
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
             Total Regras De-Para
           </span>
-          <div className="text-2xl font-bold font-mono text-foreground mt-1">
+          <div className="text-2xl font-bold tabular-nums text-foreground mt-1">
             {naturezaStats.total}
           </div>
           <p className="text-[11px] text-muted-foreground mt-0.5">Mapeadas das lojas</p>
@@ -391,7 +391,7 @@ export function PlanoContasTab() {
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
             Despesas Fixas
           </span>
-          <div className="text-2xl font-bold font-mono text-blue-600 dark:text-blue-400 mt-1">
+          <div className="text-2xl font-bold tabular-nums text-chart-line mt-1">
             {naturezaStats.fixas}
           </div>
           <p className="text-[11px] text-muted-foreground mt-0.5">Salários, ocupação, estrutura</p>
@@ -401,7 +401,7 @@ export function PlanoContasTab() {
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
             Despesas Variáveis
           </span>
-          <div className="text-2xl font-bold font-mono text-amber-600 dark:text-amber-400 mt-1">
+          <div className="text-2xl font-bold tabular-nums text-chart-amber mt-1">
             {naturezaStats.variaveis}
           </div>
           <p className="text-[11px] text-muted-foreground mt-0.5">Cartão, tributos, comissões</p>
@@ -411,7 +411,7 @@ export function PlanoContasTab() {
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
             Invest. & Não Operacionais
           </span>
-          <div className="text-2xl font-bold font-mono text-purple-600 dark:text-purple-400 mt-1">
+          <div className="text-2xl font-bold tabular-nums text-chart-line mt-1">
             {naturezaStats.invest + naturezaStats.naoOp}
           </div>
           <p className="text-[11px] text-muted-foreground mt-0.5">Reformas, sócios e ajustes</p>
@@ -512,7 +512,7 @@ export function PlanoContasTab() {
       </div>
 
       {/* ── TABELA DE DE-PARA ── */}
-      <Card className="rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+      <Card className="rounded-xl border border-border/50 bg-card overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
             <thead className="bg-muted/50 text-muted-foreground font-semibold uppercase tracking-wider border-b border-border/50">
@@ -554,7 +554,7 @@ export function PlanoContasTab() {
                       className={cn("hover:bg-muted/30 transition-colors group", !isAtivo && "opacity-60 bg-muted/10")}
                     >
                       {/* Termo da Loja / ERP */}
-                      <td className="py-2.5 px-4 font-mono font-medium text-foreground">
+                      <td className="py-2.5 px-4 tabular-nums font-medium text-foreground">
                         <span className="px-2 py-0.5 rounded bg-muted text-[11px] border border-border/40 inline-block max-w-[300px] truncate" title={item.conta_origem}>
                           {item.conta_origem}
                         </span>
@@ -625,7 +625,7 @@ export function PlanoContasTab() {
                             variant="ghost"
                             size="icon"
                             onClick={() => setDeleteConfirmItem(item)}
-                            className="h-7 w-7 rounded-lg text-muted-foreground/60 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                            className="h-7 w-7 rounded-lg text-muted-foreground/60 hover:text-chart-amber hover:bg-chart-amber/10 transition-colors"
                             title="Inativar regra"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -651,7 +651,7 @@ export function PlanoContasTab() {
           }
         }}
       >
-        <DialogContent className="max-w-md w-full p-6 rounded-2xl border border-border bg-card shadow-2xl">
+        <DialogContent className="max-w-md w-full p-6 rounded-xl border border-border bg-card shadow-2xl">
           <DialogHeader className="pb-3 border-b border-border">
             <DialogTitle className="text-lg font-bold text-foreground flex items-center gap-2">
               <Layers className="h-5 w-5 text-primary" />
@@ -681,7 +681,7 @@ export function PlanoContasTab() {
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-foreground flex items-center justify-between">
                 <span>Nome Original no ERP da Loja</span>
-                <span className="text-[10px] text-muted-foreground font-mono">conta_origem</span>
+                <span className="text-[10px] text-muted-foreground tabular-nums">conta_origem</span>
               </Label>
               <Input
                 required
@@ -689,7 +689,7 @@ export function PlanoContasTab() {
                 placeholder="Ex: INTERNET, COMBUSTIVEL, ALUGUEL..."
                 value={formOrigem}
                 onChange={(e) => setFormOrigem(e.target.value.toUpperCase())}
-                className="font-mono text-xs rounded-xl uppercase bg-background"
+                className="tabular-nums text-xs rounded-xl uppercase bg-background"
               />
               <p className="text-[10px] text-muted-foreground">
                 O texto exato que aparece nos relatórios do sistema de origem.
@@ -700,7 +700,7 @@ export function PlanoContasTab() {
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-foreground flex items-center justify-between">
                 <span>Nome Padronizado no DRE</span>
-                <span className="text-[10px] text-muted-foreground font-mono">conta_padronizada</span>
+                <span className="text-[10px] text-muted-foreground tabular-nums">conta_padronizada</span>
               </Label>
               <Input
                 required
@@ -734,7 +734,7 @@ export function PlanoContasTab() {
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-foreground flex items-center justify-between">
                 <span>Natureza do Gasto</span>
-                <span className="text-[10px] text-muted-foreground font-mono">fixa / variável</span>
+                <span className="text-[10px] text-muted-foreground tabular-nums">fixa / variável</span>
               </Label>
               <Select value={formNatureza} onValueChange={setFormNatureza}>
                 <SelectTrigger className="w-full h-10 rounded-xl text-xs bg-background">
@@ -808,15 +808,15 @@ export function PlanoContasTab() {
         open={!!deleteConfirmItem}
         onOpenChange={(open) => !open && setDeleteConfirmItem(null)}
       >
-        <DialogContent className="max-w-sm rounded-2xl">
+        <DialogContent className="max-w-sm rounded-xl">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-amber-600 dark:text-amber-400 flex items-center gap-2">
+            <DialogTitle className="text-base font-bold text-chart-amber flex items-center gap-2">
               <AlertCircle className="h-5 w-5" /> Inativar Regra de De-Para?
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground mt-2">
               Você tem certeza que deseja inativar o mapeamento de:
               <br />
-              <strong className="text-foreground font-mono block mt-1">
+              <strong className="text-foreground tabular-nums block mt-1">
                 {deleteConfirmItem?.conta_origem}
               </strong>
               <span className="block mt-2 text-[11px] text-muted-foreground">
@@ -840,7 +840,7 @@ export function PlanoContasTab() {
               onClick={() =>
                 deleteConfirmItem && inativarMutation.mutate(deleteConfirmItem.conta_origem)
               }
-              className="text-xs rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-medium"
+              className="text-xs rounded-xl bg-chart-amber hover:bg-chart-amber text-white font-medium"
             >
               {inativarMutation.isPending ? "Inativando..." : "Confirmar Inativação"}
             </Button>

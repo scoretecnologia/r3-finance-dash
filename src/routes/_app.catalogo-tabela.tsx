@@ -506,7 +506,7 @@ function CatalogoTabelaPage() {
   };
 
   return (
-    <div className="p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto animate-fade-in flex flex-col h-[calc(100vh-64px)]">
+    <div className="space-y-6 animate-fade-in flex flex-col h-[calc(100vh-112px)]">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 shrink-0">
         <div>
@@ -517,7 +517,7 @@ function CatalogoTabelaPage() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
               <TableIcon className="h-4 w-4 text-primary" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">Tabela Consolidada</h1>
+            <h1 className="text-lg font-extrabold tracking-tight text-foreground">Tabela Consolidada</h1>
           </div>
           <p className="text-sm text-muted-foreground ml-12">
             Todos os dados Parquet do bucket combinados em uma única visão interativa.
@@ -525,14 +525,14 @@ function CatalogoTabelaPage() {
         </div>
         {!isLoadingData && (
           <div className="flex items-center gap-3">
-             <Badge variant="secondary" className="font-mono bg-primary/10 text-primary border-primary/20">
+             <Badge variant="secondary" className="tabular-nums bg-primary/10 text-primary border-primary/20">
                {table.getFilteredRowModel().rows.length} registros
              </Badge>
              <Button
                 variant="outline"
                 size="sm"
                 onClick={handleExportXLSX}
-                className="h-8 rounded-lg gap-2 text-xs border-primary/20 hover:bg-primary/5 hover:border-primary/40 text-primary transition-all"
+                className="h-8 rounded-lg gap-2 text-xs border-primary/20 hover:bg-primary/5 hover:shadow-md text-primary transition-all"
              >
                <Download className="h-3.5 w-3.5" />
                Baixar XLSX
@@ -557,7 +557,7 @@ function CatalogoTabelaPage() {
                    style={{ width: `${(progress.current / progress.total) * 100}%` }}
                  />
                </div>
-               <span className="text-xs text-muted-foreground font-mono">
+               <span className="text-xs text-muted-foreground tabular-nums">
                  {progress.current} / {progress.total}
                </span>
             </div>

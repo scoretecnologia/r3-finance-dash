@@ -241,7 +241,7 @@ function CatalogoPage() {
   };
 
   return (
-    <div className="p-6 lg:p-8 space-y-6 max-w-[1700px] mx-auto animate-fade-in text-foreground bg-background">
+    <div className="space-y-6 animate-fade-in">
       {/* Cabeçalho */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
         <div>
@@ -249,7 +249,7 @@ function CatalogoPage() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <Database className="h-4 w-4" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="text-lg font-extrabold tracking-tight text-foreground">
               Catálogo de Dados Financeiros
             </h1>
           </div>
@@ -266,7 +266,7 @@ function CatalogoPage() {
             disabled={totalCount === 0}
             className="rounded-xl h-9 text-xs font-medium border-border hover:bg-muted gap-1.5 shadow-sm"
           >
-            <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <FileSpreadsheet className="h-4 w-4 text-primary" />
             Exportar XLSX ({totalCount})
           </Button>
           <Button
@@ -390,7 +390,7 @@ function CatalogoPage() {
 
         {/* ── ABA 1: DRE DETALHADO ── */}
         <TabsContent value="dre" className="m-0">
-          <Card className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+          <Card className="rounded-xl bg-card overflow-hidden">
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
               <table className="w-full text-xs text-left whitespace-nowrap">
                 <thead className="sticky top-0 z-20 bg-card border-b border-border text-muted-foreground font-semibold uppercase tracking-wider">
@@ -407,7 +407,7 @@ function CatalogoPage() {
                     <th className="py-3 px-4 text-right">Valor Líquido</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border font-mono">
+                <tbody className="divide-y divide-border tabular-nums">
                   {paginatedData.map((row: any) => (
                     <tr key={row.id} className="hover:bg-muted/40 transition-colors">
                       <td className="py-2.5 px-4 font-semibold font-sans text-foreground">{row.loja}</td>
@@ -423,7 +423,7 @@ function CatalogoPage() {
                           {row.categoria || "Outras Despesas"}
                         </Badge>
                       </td>
-                      <td className="py-2.5 px-4 text-right text-rose-600 dark:text-rose-400 font-bold">
+                      <td className="py-2.5 px-4 text-right text-destructive font-bold">
                         {formatMoney(Number(row.debito))}
                       </td>
                       <td className="py-2.5 px-4 text-right text-muted-foreground">
@@ -449,7 +449,7 @@ function CatalogoPage() {
 
         {/* ── ABA 2: FATURAMENTO LOJA ── */}
         <TabsContent value="faturamento" className="m-0">
-          <Card className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+          <Card className="rounded-xl bg-card overflow-hidden">
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
               <table className="w-full text-xs text-left whitespace-nowrap">
                 <thead className="sticky top-0 z-20 bg-card border-b border-border text-muted-foreground font-semibold uppercase tracking-wider">
@@ -463,7 +463,7 @@ function CatalogoPage() {
                     <th className="py-3 px-4 text-right">Data de Cadastro</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border font-mono">
+                <tbody className="divide-y divide-border tabular-nums">
                   {paginatedData.map((row: any) => (
                     <tr key={row.id} className="hover:bg-muted/40 transition-colors">
                       <td className="py-3 px-4 font-semibold font-sans text-foreground">{row.loja}</td>
@@ -471,7 +471,7 @@ function CatalogoPage() {
                       <td className="py-3 px-4 font-bold text-foreground">{row.codigo_loja || "—"}</td>
                       <td className="py-3 px-4">{row.mes_inicio}</td>
                       <td className="py-3 px-4">{row.mes_fim}</td>
-                      <td className="py-3 px-4 text-right text-emerald-600 dark:text-emerald-400 font-bold text-sm">
+                      <td className="py-3 px-4 text-right text-primary font-bold text-sm">
                         {formatMoney(Number(row.total_faturamento))}
                       </td>
                       <td className="py-3 px-4 text-right text-muted-foreground font-sans">
@@ -536,7 +536,7 @@ function CatalogoPage() {
               >
                 <ChevronLeft className="h-3.5 w-3.5 mr-1" /> Anterior
               </Button>
-              <span className="px-2 font-semibold font-mono text-foreground">
+              <span className="px-2 font-semibold tabular-nums text-foreground">
                 {currentPage} / {totalPages}
               </span>
               <Button

@@ -1,8 +1,10 @@
 import { Outlet, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, LogOut } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/external";
 import { toast } from "sonner";
 
@@ -43,11 +45,9 @@ function AppLayout() {
 
     verify();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (!session) navigate({ to: "/auth", replace: true });
-      },
-    );
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) navigate({ to: "/auth", replace: true });
+    });
 
     return () => {
       mounted = false;
@@ -63,30 +63,51 @@ function AppLayout() {
 
   if (checking) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background gradient-mesh">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background">
         <div className="flex items-center gap-3 animate-slide-up">
-          <div className="relative">
-            <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
-            <Loader2 className="h-6 w-6 animate-spin text-primary relative z-10" />
-          </div>
-          <span className="text-sm font-medium text-muted-foreground">
-            Carregando...
-          </span>
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <span className="text-sm font-medium text-muted-foreground">Carregando...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex w-full bg-background transition-theme">
-      <AppSidebar email={email} onLogout={handleLogout} />
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Main content */}
-        <main className="flex-1 overflow-auto">
-          <Outlet />
-        </main>
+    <TooltipProvider>
+      <div className="min-h-screen bg-background flex">
+        <AppSidebar email={email} onLogout={handleLogout} />
+
+        <div className="ml-14 flex-1 min-w-0">
+          {/* Header fixo no estilo do Data Hub */}
+          <header className="sticky top-0 z-40 flex items-center justify-between border-b border-border bg-card/80 px-6 py-3 backdrop-blur-md">
+            <div>
+              <h1 className="text-base font-extrabold tracking-tight text-primary">Grupo R3</h1>
+              <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+                Análise Financeira
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {email && (
+                <span className="hidden text-xs text-muted-foreground sm:inline">{email}</span>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                className="text-muted-foreground transition-colors hover:text-destructive"
+                title="Sair"
+              >
+                <LogOut className="h-5 w-5" />
+              </Button>
+            </div>
+          </header>
+
+          <main className="p-6">
+            <Outlet />
+          </main>
+        </div>
+        <Toaster richColors position="top-right" />
       </div>
-      <Toaster richColors position="top-right" />
-    </div>
+    </TooltipProvider>
   );
 }

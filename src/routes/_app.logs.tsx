@@ -208,7 +208,7 @@ function LogsPage() {
   const failureCount = allExecutions.filter((e) => e.status === "Falha").length;
 
   return (
-    <div className="p-6 lg:p-8 space-y-6 max-w-7xl mx-auto animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
@@ -216,7 +216,7 @@ function LogsPage() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <Terminal className="h-4 w-4" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">Logs de Execução (Kestra)</h1>
+            <h1 className="text-lg font-extrabold tracking-tight text-foreground">Logs de Execução (Kestra)</h1>
           </div>
           <p className="text-sm text-muted-foreground ml-[42px]">
             Monitore em tempo real o histórico e os registros de extração das lojas.
@@ -248,7 +248,7 @@ function LogsPage() {
 
           <Button
             onClick={() => setSyncOpen(true)}
-            className="rounded-xl h-9 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20 gap-1.5 transition-all"
+            className="rounded-xl h-9 text-xs font-semibold bg-primary hover:bg-primary text-white shadow-md shadow-primary/20 gap-1.5 transition-all"
           >
             <Play className="h-3.5 w-3.5 fill-current" />
             Nova Execução
@@ -275,12 +275,12 @@ function LogsPage() {
         <Card className="p-4 rounded-xl border-border/40 bg-card/80 backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-primary">
                 Sucesso
               </p>
               <p className="text-2xl font-bold mt-1 text-foreground">{successCount}</p>
             </div>
-            <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
               <CheckCircle2 className="h-5 w-5" />
             </div>
           </div>
@@ -289,12 +289,12 @@ function LogsPage() {
         <Card className="p-4 rounded-xl border-border/40 bg-card/80 backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-chart-line">
                 Em Execução
               </p>
               <p className="text-2xl font-bold mt-1 text-foreground">{runningCount}</p>
             </div>
-            <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
+            <div className="h-10 w-10 rounded-xl bg-chart-line/10 flex items-center justify-center text-chart-line">
               <Loader2 className={cn("h-5 w-5", runningCount > 0 && "animate-spin")} />
             </div>
           </div>
@@ -398,7 +398,7 @@ function LogsPage() {
                       {exec.status === "Sucesso" && (
                         <Badge
                           variant="outline"
-                          className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium"
+                          className="bg-primary/10 text-primary border-primary/20 gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium"
                         >
                           <CheckCircle2 className="h-3 w-3" />
                           Sucesso
@@ -407,7 +407,7 @@ function LogsPage() {
                       {exec.status === "Em Execução" && (
                         <Badge
                           variant="outline"
-                          className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium animate-pulse"
+                          className="bg-chart-line/10 text-chart-line border-chart-line/20 gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium animate-pulse"
                         >
                           <Loader2 className="h-3 w-3 animate-spin" />
                           Rodando
@@ -425,7 +425,7 @@ function LogsPage() {
                       {exec.status === "Pausado" && (
                         <Badge
                           variant="outline"
-                          className="bg-amber-500/10 text-amber-600 border-amber-500/20 gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium"
+                          className="bg-chart-amber/10 text-chart-amber border-chart-amber/20 gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium"
                         >
                           <AlertCircle className="h-3 w-3" />
                           Pausado
@@ -445,7 +445,7 @@ function LogsPage() {
 
                     {/* Fluxo */}
                     <TableCell>
-                      <span className="text-xs text-muted-foreground font-mono">
+                      <span className="text-xs text-muted-foreground tabular-nums">
                         {exec.fluxo}
                       </span>
                     </TableCell>
@@ -460,7 +460,7 @@ function LogsPage() {
 
                     {/* Duração */}
                     <TableCell>
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-mono">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
                         <Clock className="h-3 w-3 opacity-60" />
                         <span>{exec.tempo}</span>
                       </div>
@@ -472,7 +472,7 @@ function LogsPage() {
                         <Button
                           size="sm"
                           onClick={() => handleOpenLogs(exec)}
-                          className="h-8 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs gap-1.5 shadow-sm"
+                          className="h-8 rounded-lg bg-primary hover:bg-primary text-white font-semibold text-xs gap-1.5 shadow-sm"
                         >
                           <Terminal className="h-3.5 w-3.5" />
                           Console
@@ -536,7 +536,7 @@ function LogsPage() {
           <div className="p-5 border-b border-zinc-800 bg-zinc-900/60 shrink-0">
             <SheetHeader className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-primary font-mono text-xs uppercase tracking-wider font-semibold">
+                <div className="flex items-center gap-2 text-primary tabular-nums text-xs uppercase tracking-wider font-semibold">
                   <Terminal className="h-4 w-4" />
                   Console de Logs da Execução
                 </div>
@@ -544,10 +544,10 @@ function LogsPage() {
                   <Badge
                     variant="outline"
                     className={cn(
-                      "font-mono text-[10px] uppercase border",
-                      selectedExec.status === "Sucesso" && "border-emerald-500/40 text-emerald-400 bg-emerald-950/30",
-                      selectedExec.status === "Em Execução" && "border-blue-500/40 text-blue-400 bg-blue-950/30 animate-pulse",
-                      selectedExec.status === "Falha" && "border-rose-500/40 text-rose-400 bg-rose-950/30",
+                      "tabular-nums text-[10px] uppercase border",
+                      selectedExec.status === "Sucesso" && "border-primary/40 text-primary bg-primary/30",
+                      selectedExec.status === "Em Execução" && "border-chart-line/40 text-chart-line bg-chart-line/30 animate-pulse",
+                      selectedExec.status === "Falha" && "border-destructive/40 text-destructive bg-destructive/30",
                     )}
                   >
                     {selectedExec.status}
@@ -556,11 +556,11 @@ function LogsPage() {
               </div>
               <SheetTitle className="text-base font-bold text-zinc-50 flex items-center justify-between gap-2">
                 <span className="truncate">{selectedExec?.loja}</span>
-                <span className="text-[11px] font-mono px-2 py-0.5 bg-zinc-800 text-zinc-400 rounded shrink-0">
+                <span className="text-[11px] tabular-nums px-2 py-0.5 bg-zinc-800 text-zinc-400 rounded shrink-0">
                   ID: {selectedExec?.id}
                 </span>
               </SheetTitle>
-              <SheetDescription className="text-zinc-400 text-xs font-mono">
+              <SheetDescription className="text-zinc-400 text-xs tabular-nums">
                 {selectedExec?.fluxo} • Duração: {selectedExec?.tempo} • Início: {selectedExec?.data}
               </SheetDescription>
             </SheetHeader>
@@ -573,7 +573,7 @@ function LogsPage() {
                   placeholder="Filtrar mensagem do log..."
                   value={logSearch}
                   onChange={(e) => setLogSearch(e.target.value)}
-                  className="pl-8 h-8 rounded-lg bg-zinc-900 border-zinc-800 text-zinc-200 placeholder:text-zinc-500 text-xs font-mono"
+                  className="pl-8 h-8 rounded-lg bg-zinc-900 border-zinc-800 text-zinc-200 placeholder:text-zinc-500 text-xs tabular-nums"
                 />
               </div>
 
@@ -584,7 +584,7 @@ function LogsPage() {
                     type="button"
                     onClick={() => setLogFilter(lvl)}
                     className={cn(
-                      "px-2 py-1 rounded text-[10px] font-mono uppercase transition-colors",
+                      "px-2 py-1 rounded text-[10px] tabular-nums uppercase transition-colors",
                       logFilter === lvl
                         ? "bg-zinc-800 text-zinc-100 font-bold"
                         : "text-zinc-500 hover:text-zinc-300",
@@ -600,7 +600,7 @@ function LogsPage() {
                 size="sm"
                 onClick={handleRefreshLogs}
                 disabled={loadingLogs}
-                className="h-8 px-2.5 rounded-lg border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 text-xs font-mono"
+                className="h-8 px-2.5 rounded-lg border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 text-xs tabular-nums"
               >
                 <RefreshCw className={cn("h-3.5 w-3.5 mr-1", loadingLogs && "animate-spin")} />
                 Recarregar
@@ -611,16 +611,16 @@ function LogsPage() {
                 size="sm"
                 onClick={handleCopyLogs}
                 disabled={filteredLogs.length === 0}
-                className="h-8 px-2.5 rounded-lg border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 text-xs font-mono"
+                className="h-8 px-2.5 rounded-lg border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 text-xs tabular-nums"
               >
-                {copied ? <Check className="h-3.5 w-3.5 text-emerald-400 mr-1" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
+                {copied ? <Check className="h-3.5 w-3.5 text-primary mr-1" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
                 {copied ? "Copiado" : "Copiar"}
               </Button>
             </div>
           </div>
 
           {/* Área de Logs Terminal */}
-          <div className="flex-1 overflow-y-auto p-4 font-mono text-[11px] leading-relaxed bg-zinc-950 selection:bg-zinc-800 space-y-1">
+          <div className="flex-1 overflow-y-auto p-4 tabular-nums text-[11px] leading-relaxed bg-zinc-950 selection:bg-zinc-800 space-y-1">
             {loadingLogs ? (
               <div className="flex flex-col items-center justify-center h-full gap-2.5 text-zinc-500 py-16">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -639,8 +639,8 @@ function LogsPage() {
                   <span
                     className={cn(
                       "select-none text-[9px] uppercase px-1.5 py-0.5 rounded font-bold shrink-0 text-center w-[46px]",
-                      log.level === "ERROR" && "bg-rose-950/60 border border-rose-800 text-rose-400",
-                      log.level === "WARN" && "bg-amber-950/60 border border-amber-800 text-amber-400",
+                      log.level === "ERROR" && "bg-destructive/60 border border-destructive text-destructive",
+                      log.level === "WARN" && "bg-chart-amber/60 border border-chart-amber text-chart-amber",
                       log.level === "INFO" && "bg-zinc-900 border border-zinc-800 text-zinc-400",
                       log.level === "DEBUG" && "bg-zinc-900/50 border border-zinc-800/50 text-zinc-600",
                     )}
@@ -656,9 +656,9 @@ function LogsPage() {
 
                   <span
                     className={cn(
-                      "break-words whitespace-pre-wrap flex-1 min-w-0 font-mono",
-                      log.level === "ERROR" && "text-rose-300 font-semibold",
-                      log.level === "WARN" && "text-amber-200",
+                      "break-words whitespace-pre-wrap flex-1 min-w-0 tabular-nums",
+                      log.level === "ERROR" && "text-destructive font-semibold",
+                      log.level === "WARN" && "text-chart-amber",
                       log.level === "INFO" && "text-zinc-300",
                       log.level === "DEBUG" && "text-zinc-500",
                     )}
@@ -678,7 +678,7 @@ function LogsPage() {
 
           {/* Footer do Sheet */}
           <div className="p-3.5 border-t border-zinc-800 bg-zinc-900/50 flex items-center justify-between shrink-0">
-            <span className="text-[11px] text-zinc-500 font-mono">
+            <span className="text-[11px] text-zinc-500 tabular-nums">
               {filteredLogs.length} linha{filteredLogs.length === 1 ? "" : "s"} de log
             </span>
             <div className="flex items-center gap-2">
@@ -686,7 +686,7 @@ function LogsPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => setSheetOpen(false)}
-                className="rounded-lg border-zinc-800 hover:bg-zinc-900 text-zinc-400 text-xs font-mono h-8"
+                className="rounded-lg border-zinc-800 hover:bg-zinc-900 text-zinc-400 text-xs tabular-nums h-8"
               >
                 Fechar Console
               </Button>
@@ -697,7 +697,7 @@ function LogsPage() {
                   rel="noopener noreferrer"
                   className={cn(
                     buttonVariants({ variant: "default", size: "sm" }),
-                    "rounded-lg text-xs font-mono gap-1.5 h-8 bg-zinc-800 hover:bg-zinc-700 text-zinc-100",
+                    "rounded-lg text-xs tabular-nums gap-1.5 h-8 bg-zinc-800 hover:bg-zinc-700 text-zinc-100",
                   )}
                 >
                   <ExternalLink className="h-3 w-3" />
