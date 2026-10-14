@@ -9,21 +9,22 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
-import { Route as AppLogsRouteImport } from './routes/_app.logs'
-import { Route as AppConfiguracoesRouteImport } from './routes/_app.configuracoes'
-import { Route as AppCatalogoTabelaRouteImport } from './routes/_app.catalogo-tabela'
+import { Route as AppApuracaoRouteImport } from './routes/_app.apuracao'
 import { Route as AppCatalogoRouteImport } from './routes/_app.catalogo'
+import { Route as AppCatalogoTabelaRouteImport } from './routes/_app.catalogo-tabela'
+import { Route as AppConfiguracoesRouteImport } from './routes/_app.configuracoes'
+import { Route as AppLogsRouteImport } from './routes/_app.logs'
 
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AppRoute = AppRouteImport.update({
-  id: '/_app',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -31,19 +32,9 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
-const AppLogsRoute = AppLogsRouteImport.update({
-  id: '/logs',
-  path: '/logs',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
-  id: '/configuracoes',
-  path: '/configuracoes',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppCatalogoTabelaRoute = AppCatalogoTabelaRouteImport.update({
-  id: '/catalogo-tabela',
-  path: '/catalogo-tabela',
+const AppApuracaoRoute = AppApuracaoRouteImport.update({
+  id: '/apuracao',
+  path: '/apuracao',
   getParentRoute: () => AppRoute,
 } as any)
 const AppCatalogoRoute = AppCatalogoRouteImport.update({
@@ -51,10 +42,26 @@ const AppCatalogoRoute = AppCatalogoRouteImport.update({
   path: '/catalogo',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCatalogoTabelaRoute = AppCatalogoTabelaRouteImport.update({
+  id: '/catalogo-tabela',
+  path: '/catalogo-tabela',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppConfiguracoesRoute = AppConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppLogsRoute = AppLogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/auth': typeof AuthRoute
+  '/apuracao': typeof AppApuracaoRoute
   '/catalogo': typeof AppCatalogoRoute
   '/catalogo-tabela': typeof AppCatalogoTabelaRoute
   '/configuracoes': typeof AppConfiguracoesRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
+  '/apuracao': typeof AppApuracaoRoute
   '/catalogo': typeof AppCatalogoRoute
   '/catalogo-tabela': typeof AppCatalogoTabelaRoute
   '/configuracoes': typeof AppConfiguracoesRoute
@@ -72,6 +80,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_app/apuracao': typeof AppApuracaoRoute
   '/_app/catalogo': typeof AppCatalogoRoute
   '/_app/catalogo-tabela': typeof AppCatalogoTabelaRoute
   '/_app/configuracoes': typeof AppConfiguracoesRoute
@@ -83,6 +92,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/apuracao'
     | '/catalogo'
     | '/catalogo-tabela'
     | '/configuracoes'
@@ -90,6 +100,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
+    | '/apuracao'
     | '/catalogo'
     | '/catalogo-tabela'
     | '/configuracoes'
@@ -99,6 +110,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_app'
     | '/auth'
+    | '/_app/apuracao'
     | '/_app/catalogo'
     | '/_app/catalogo-tabela'
     | '/_app/configuracoes'
@@ -113,18 +125,18 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_app': {
       id: '/_app'
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/': {
@@ -134,25 +146,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/logs': {
-      id: '/_app/logs'
-      path: '/logs'
-      fullPath: '/logs'
-      preLoaderRoute: typeof AppLogsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/configuracoes': {
-      id: '/_app/configuracoes'
-      path: '/configuracoes'
-      fullPath: '/configuracoes'
-      preLoaderRoute: typeof AppConfiguracoesRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/catalogo-tabela': {
-      id: '/_app/catalogo-tabela'
-      path: '/catalogo-tabela'
-      fullPath: '/catalogo-tabela'
-      preLoaderRoute: typeof AppCatalogoTabelaRouteImport
+    '/_app/apuracao': {
+      id: '/_app/apuracao'
+      path: '/apuracao'
+      fullPath: '/apuracao'
+      preLoaderRoute: typeof AppApuracaoRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/catalogo': {
@@ -162,10 +160,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCatalogoRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/catalogo-tabela': {
+      id: '/_app/catalogo-tabela'
+      path: '/catalogo-tabela'
+      fullPath: '/catalogo-tabela'
+      preLoaderRoute: typeof AppCatalogoTabelaRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/configuracoes': {
+      id: '/_app/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof AppConfiguracoesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/logs': {
+      id: '/_app/logs'
+      path: '/logs'
+      fullPath: '/logs'
+      preLoaderRoute: typeof AppLogsRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppApuracaoRoute: typeof AppApuracaoRoute
   AppCatalogoRoute: typeof AppCatalogoRoute
   AppCatalogoTabelaRoute: typeof AppCatalogoTabelaRoute
   AppConfiguracoesRoute: typeof AppConfiguracoesRoute
@@ -174,6 +194,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppApuracaoRoute: AppApuracaoRoute,
   AppCatalogoRoute: AppCatalogoRoute,
   AppCatalogoTabelaRoute: AppCatalogoTabelaRoute,
   AppConfiguracoesRoute: AppConfiguracoesRoute,

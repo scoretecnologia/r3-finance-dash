@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   LayoutDashboard,
+  FileSpreadsheet,
   Settings,
   ScrollText,
   Database,
@@ -23,6 +24,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Apuração", url: "/apuracao", icon: FileSpreadsheet },
   { title: "Configurações", url: "/configuracoes", icon: Settings },
   { title: "Catálogo de Dados", url: "/catalogo", icon: Database },
   { title: "Logs", url: "/logs", icon: ScrollText },

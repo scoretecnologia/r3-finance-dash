@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, Fragment } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/external";
 import * as XLSX from "xlsx";
@@ -1088,13 +1088,22 @@ function DashboardPage() {
       {/* --- CABEÇALHO & FILTROS GLOBAIS --- */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-border">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              DRE Gerencial & Apuração de Resultado
+              DRE Gerencial
             </h1>
             <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[11px] gap-1 font-sans">
               <CheckCircle2 className="h-3 w-3" /> Plano de Contas Padronizado
             </Badge>
+            <Link
+              to="/apuracao"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all ml-1 shadow-sm"
+              title="Ir para a tela detalhada de Apuração de Resultado"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              <span>Ver Apuração de Resultado</span>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">
             Estrutura gerencial unificada: Faturamento, Margem de Contribuição, Despesas por Grupo e Distribuição de Lucro.
@@ -1178,351 +1187,188 @@ function DashboardPage() {
         </div>
       </div>
 
-      {/* --- SEÇÃO SUPERIOR: CARDS KPI + CARD EXECUTIVO DE APURAÇÃO (MODELO PLANILHA) --- */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        {/* LADO ESQUERDO (7 Colunas): 5 KPIs Essenciais */}
-        <div className="xl:col-span-7 space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {/* KPI 1: Faturamento */}
-            <Card className="p-4 rounded-xl border border-border bg-card shadow-sm hover:border-emerald-500/40 transition-all">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  (=) Faturamento
-                </span>
-                <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  <DollarSign className="h-4 w-4" />
-                </div>
-              </div>
-              <div className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-2">
-                {formatMoney(apuracaoValues.fat)}
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-1">
-                {hasMonthFilter ? `${activeMonthLabel} de ${yearLabel}` : `Acumulado ${yearLabel}`}
-              </p>
-            </Card>
-
-            {/* KPI 2: Margem de Contribuição */}
-            <Card className="p-4 rounded-xl border border-border bg-card shadow-sm hover:border-cyan-500/40 transition-all">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  (=) Margem Contrib.
-                </span>
-                <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
-                  <TrendingUp className="h-4 w-4" />
-                </div>
-              </div>
-              <div className="text-xl font-bold font-mono text-cyan-600 dark:text-cyan-400 mt-2">
-                {formatMoney(apuracaoValues.margem)}
-              </div>
-              <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-1">
-                Margem:{" "}
-                <strong className="text-cyan-600 dark:text-cyan-400 font-mono">
-                  {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.margem / apuracaoValues.fat) * 100) : "0.0%"}
-                </strong>
-              </div>
-            </Card>
-
-            {/* KPI 3: Despesas Operacionais Totais */}
-            <Card className="p-4 rounded-xl border border-border bg-card shadow-sm hover:border-rose-500/40 transition-all">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  (-) Total Despesas
-                </span>
-                <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400">
-                  <TrendingDown className="h-4 w-4" />
-                </div>
-              </div>
-              <div className="text-xl font-bold font-mono text-rose-600 dark:text-rose-400 mt-2">
-                {formatMoney(apuracaoValues.despTot)}
-              </div>
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1">
-                <span>
-                  Fixas: <strong className="text-foreground font-mono">{formatMoney(apuracaoValues.fixas)}</strong>
-                </span>
-                <span>
-                  Variáveis: <strong className="text-foreground font-mono">{formatMoney(apuracaoValues.variaveis)}</strong>
-                </span>
-              </div>
-            </Card>
-
-            {/* KPI 4: Lucro Líquido */}
-            <Card className="p-4 rounded-xl border border-border bg-card shadow-sm hover:border-emerald-500/40 transition-all">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  (=) Lucro Líquido
-                </span>
-                <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  <Receipt className="h-4 w-4" />
-                </div>
-              </div>
-              <div
-                className={cn(
-                  "text-xl font-bold font-mono mt-2",
-                  apuracaoValues.lucro >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
-                )}
-              >
-                {formatMoney(apuracaoValues.lucro)}
-              </div>
-              <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-1">
-                Margem Líquida:{" "}
-                <strong className={cn("font-mono", apuracaoValues.lucro >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
-                  {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.lucro / apuracaoValues.fat) * 100) : "0.0%"}
-                </strong>
-              </div>
-            </Card>
-
-            {/* KPI 5: Distribuição do Lucro / Comissão Parceiro */}
-            <Card className="p-4 rounded-xl border border-border bg-card shadow-sm col-span-2 sm:col-span-2 hover:border-indigo-500/40 transition-all">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    (=) Distribuição do Lucro
-                  </span>
-                  {partnerInfo.hasRules && (
-                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30 font-mono">
-                      {partnerInfo.badgeLabel}
-                    </Badge>
-                  )}
-                </div>
-                <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                  <Wallet className="h-4 w-4" />
-                </div>
-              </div>
-              <div
-                className={cn(
-                  "text-2xl font-bold font-mono mt-2",
-                  apuracaoValues.dist >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
-                )}
-              >
-                {formatMoney(apuracaoValues.dist)}
-              </div>
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1 gap-2 flex-wrap">
-                <span className="text-muted-foreground">
-                  Comissão Parceiro:{" "}
-                  <strong className="text-indigo-600 dark:text-indigo-400 font-mono font-semibold">
-                    {formatMoney(apuracaoValues.comissao)}
-                  </strong>
-                </span>
-                <span>
-                  Retorno Efetivo:{" "}
-                  <strong className={cn("font-mono", apuracaoValues.dist >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
-                    {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.dist / apuracaoValues.fat) * 100) : "0.0%"}
-                  </strong>
-                </span>
-              </div>
-            </Card>
+      {/* --- SEÇÃO SUPERIOR: 5 CARDS KPI ESSENCIAIS (LARGURA TOTAL) --- */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        {/* KPI 1: Faturamento */}
+        <Card className="p-4 rounded-xl border border-border bg-card shadow-sm hover:border-emerald-500/40 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              (=) Faturamento
+            </span>
+            <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <DollarSign className="h-4 w-4" />
+            </div>
           </div>
+          <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-2">
+            {formatMoney(apuracaoValues.fat)}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            {hasMonthFilter ? `${activeMonthLabel} de ${yearLabel}` : `Acumulado ${yearLabel}`}
+          </p>
+        </Card>
 
-          {/* Gráfico de Evolução Compacto */}
-          <Card className="p-4 rounded-xl border border-border bg-card shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <BarChart3 className="h-3.5 w-3.5 text-primary" /> Evolução Mensal (Faturamento vs Margem vs Despesas)
+        {/* KPI 2: Margem de Contribuição */}
+        <Card className="p-4 rounded-xl border border-border bg-card shadow-sm hover:border-cyan-500/40 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              (=) Margem Contrib.
+            </span>
+            <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
+              <TrendingUp className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold font-mono text-cyan-600 dark:text-cyan-400 mt-2">
+            {formatMoney(apuracaoValues.margem)}
+          </div>
+          <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-1">
+            Margem:{" "}
+            <strong className="text-cyan-600 dark:text-cyan-400 font-mono">
+              {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.margem / apuracaoValues.fat) * 100) : "0.0%"}
+            </strong>
+          </div>
+        </Card>
+
+        {/* KPI 3: Despesas Operacionais Totais */}
+        <Card className="p-4 rounded-xl border border-border bg-card shadow-sm hover:border-rose-500/40 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              (-) Total Despesas
+            </span>
+            <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400">
+              <TrendingDown className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold font-mono text-rose-600 dark:text-rose-400 mt-2">
+            {formatMoney(apuracaoValues.despTot)}
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1">
+            <span>
+              Fixas: <strong className="text-foreground font-mono">{formatMoney(apuracaoValues.fixas)}</strong>
+            </span>
+            <span>
+              Variáveis: <strong className="text-foreground font-mono">{formatMoney(apuracaoValues.variaveis)}</strong>
+            </span>
+          </div>
+        </Card>
+
+        {/* KPI 4: Lucro Líquido */}
+        <Card className="p-4 rounded-xl border border-border bg-card shadow-sm hover:border-emerald-500/40 transition-all">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              (=) Lucro Líquido
+            </span>
+            <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <Receipt className="h-4 w-4" />
+            </div>
+          </div>
+          <div
+            className={cn(
+              "text-2xl font-bold font-mono mt-2",
+              apuracaoValues.lucro >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+            )}
+          >
+            {formatMoney(apuracaoValues.lucro)}
+          </div>
+          <div className="flex items-center gap-1 text-[11px] text-muted-foreground mt-1">
+            Margem Líquida:{" "}
+            <strong className={cn("font-mono", apuracaoValues.lucro >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
+              {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.lucro / apuracaoValues.fat) * 100) : "0.0%"}
+            </strong>
+          </div>
+        </Card>
+
+        {/* KPI 5: Distribuição do Lucro / Comissão Parceiro */}
+        <Card className="p-4 rounded-xl border border-border bg-card shadow-sm col-span-1 sm:col-span-2 lg:col-span-1 hover:border-indigo-500/40 transition-all">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                (=) Distribuição
               </span>
-              <span className="text-[11px] text-muted-foreground font-mono">12 Meses</span>
+              {partnerInfo.hasRules && (
+                <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30 font-mono">
+                  {partnerInfo.badgeLabel}
+                </Badge>
+              )}
             </div>
-            <div className="h-48 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={evolutionChartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gradFat" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="gradMargem" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="gradDesp" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.08} vertical={false} />
-                  <XAxis dataKey="label" stroke="currentColor" opacity={0.5} fontSize={10} tickLine={false} />
-                  <YAxis stroke="currentColor" opacity={0.5} fontSize={10} tickLine={false} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--card-foreground)", borderRadius: "8px", fontSize: "11px" }}
-                    formatter={(val: number) => [formatMoney(val), ""]}
-                  />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: "11px", paddingTop: "5px" }} />
-                  <Area type="monotone" dataKey="faturamento" name="Faturamento" stroke="#10b981" fillOpacity={1} fill="url(#gradFat)" strokeWidth={2} />
-                  <Area type="monotone" dataKey="margemContrib" name="Margem Contrib." stroke="#06b6d4" fillOpacity={1} fill="url(#gradMargem)" strokeWidth={1.5} />
-                  <Area type="monotone" dataKey="despesas" name="Total Despesas" stroke="#ef4444" fillOpacity={1} fill="url(#gradDesp)" strokeWidth={1.5} />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+              <Wallet className="h-4 w-4" />
             </div>
-          </Card>
-        </div>
-
-        {/* LADO DIREITO (5 Colunas): CARD EXECUTIVO DE APURAÇÃO (IDÊNTICO À PLANILHA DO CLIENTE) */}
-        <div className="xl:col-span-5">
-          <Card className="rounded-xl border-2 border-primary/20 bg-card shadow-md overflow-hidden">
-            {/* Header no estilo do cabeçalho da planilha azul */}
-            <div className="bg-primary text-primary-foreground p-3.5 text-center font-bold tracking-wide">
-              <div className="text-sm uppercase flex items-center justify-center gap-1.5">
-                <Sparkles className="h-4 w-4" /> Apuração mês - {activeMonthLabel}
-              </div>
-              <div className="text-xs opacity-90 font-medium mt-0.5 truncate">
-                Cidade: <span className="font-bold underline">{selectedScopeLabel.toUpperCase()}</span>
-              </div>
-            </div>
-
-            {/* Linhas da Apuração com Valores e Percentuais */}
-            <div className="divide-y divide-border text-xs font-mono">
-              {/* 1. Faturamento */}
-              <div className="flex items-center justify-between p-2.5 bg-emerald-500/10 font-bold">
-                <span className="font-sans text-emerald-700 dark:text-emerald-400">(=) Faturamento</span>
-                <div className="flex items-center gap-4">
-                  <span className="text-emerald-700 dark:text-emerald-400">{formatMoney(apuracaoValues.fat)}</span>
-                  <span className="w-14 text-right text-emerald-700 dark:text-emerald-400">100,0%</span>
-                </div>
-              </div>
-
-              {/* 2. CMV */}
-              <div className="flex items-center justify-between p-2 text-muted-foreground hover:bg-muted/30">
-                <span className="font-sans">(-) Custo da mercadoria vendida</span>
-                <div className="flex items-center gap-4">
-                  <span>{formatMoney(apuracaoValues.cmv, true)}</span>
-                  <span className="w-14 text-right">0,0%</span>
-                </div>
-              </div>
-
-              {/* 3. Avarias */}
-              <div className="flex items-center justify-between p-2 text-muted-foreground hover:bg-muted/30">
-                <span className="font-sans">(-) Avarias</span>
-                <div className="flex items-center gap-4">
-                  <span className="text-rose-600 dark:text-rose-400">{formatMoney(apuracaoValues.avarias, true)}</span>
-                  <span className="w-14 text-right font-medium">
-                    {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.avarias / apuracaoValues.fat) * 100) : "0,0%"}
-                  </span>
-                </div>
-              </div>
-
-              {/* 4. Margem de contribuição */}
-              <div className="flex items-center justify-between p-2.5 bg-cyan-500/10 font-bold">
-                <span className="font-sans text-cyan-700 dark:text-cyan-400">(=) Margem de contribuição</span>
-                <div className="flex items-center gap-4">
-                  <span className="text-cyan-700 dark:text-cyan-400">{formatMoney(apuracaoValues.margem)}</span>
-                  <span className="w-14 text-right text-cyan-700 dark:text-cyan-400">
-                    {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.margem / apuracaoValues.fat) * 100) : "0,0%"}
-                  </span>
-                </div>
-              </div>
-
-              {/* 5. Despesas Administrativas */}
-              <div className="flex items-center justify-between p-2 text-muted-foreground hover:bg-muted/30">
-                <span className="font-sans">(-) Despesas Administrativas</span>
-                <div className="flex items-center gap-4">
-                  <span className="text-rose-600 dark:text-rose-400">{formatMoney(apuracaoValues.adm, true)}</span>
-                  <span className="w-14 text-right">
-                    {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.adm / apuracaoValues.fat) * 100) : "0,0%"}
-                  </span>
-                </div>
-              </div>
-
-              {/* 6. Despesa logística */}
-              <div className="flex items-center justify-between p-2 text-muted-foreground hover:bg-muted/30">
-                <span className="font-sans">(-) Despesa logística</span>
-                <div className="flex items-center gap-4">
-                  <span className="text-rose-600 dark:text-rose-400">{formatMoney(apuracaoValues.log, true)}</span>
-                  <span className="w-14 text-right">
-                    {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.log / apuracaoValues.fat) * 100) : "0,0%"}
-                  </span>
-                </div>
-              </div>
-
-              {/* 7. Taxas de cartão */}
-              <div className="flex items-center justify-between p-2 text-muted-foreground hover:bg-muted/30">
-                <span className="font-sans">(-) Taxas de cartão</span>
-                <div className="flex items-center gap-4">
-                  <span className="text-rose-600 dark:text-rose-400">{formatMoney(apuracaoValues.cartao, true)}</span>
-                  <span className="w-14 text-right">
-                    {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.cartao / apuracaoValues.fat) * 100) : "0,0%"}
-                  </span>
-                </div>
-              </div>
-
-              {/* 8. Tributos */}
-              <div className="flex items-center justify-between p-2 text-muted-foreground hover:bg-muted/30">
-                <span className="font-sans">(-) Tributos</span>
-                <div className="flex items-center gap-4">
-                  <span className="text-rose-600 dark:text-rose-400">{formatMoney(apuracaoValues.trib, true)}</span>
-                  <span className="w-14 text-right">
-                    {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.trib / apuracaoValues.fat) * 100) : "0,0%"}
-                  </span>
-                </div>
-              </div>
-
-              {/* 9. Total despesas */}
-              <div className="flex items-center justify-between p-2.5 bg-rose-500/10 font-bold">
-                <span className="font-sans text-rose-700 dark:text-rose-400 uppercase text-[11px] tracking-wider">
-                  Total despesas
-                </span>
-                <div className="flex items-center gap-4">
-                  <span className="text-rose-700 dark:text-rose-400">{formatMoney(apuracaoValues.despTot)}</span>
-                  <span className="w-14 text-right text-rose-700 dark:text-rose-400">
-                    {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.despTot / apuracaoValues.fat) * 100) : "0,0%"}
-                  </span>
-                </div>
-              </div>
-
-              {/* 10. Lucro líquido */}
-              <div className="flex items-center justify-between p-2.5 bg-muted/60 font-bold border-t-2 border-border">
-                <span className="font-sans text-foreground">(=) Lucro líquido</span>
-                <div className="flex items-center gap-4">
-                  <span className={cn(apuracaoValues.lucro >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
-                    {formatMoney(apuracaoValues.lucro)}
-                  </span>
-                  <span className={cn("w-14 text-right", apuracaoValues.lucro >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
-                    {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.lucro / apuracaoValues.fat) * 100) : "0,0%"}
-                  </span>
-                </div>
-              </div>
-
-              {/* 11. Comissão parceiro */}
-              <div className="flex items-center justify-between p-2 text-muted-foreground hover:bg-muted/30">
-                <div className="flex items-center gap-1.5 font-sans">
-                  <span className="text-foreground font-medium">Comissão parceiro</span>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "text-[9px] py-0 px-1 font-mono",
-                      partnerInfo.hasRules
-                        ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-600 dark:text-indigo-400 font-semibold"
-                        : "border-muted-foreground/30 text-muted-foreground font-normal"
-                    )}
-                  >
-                    {partnerInfo.badgeLabel}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-indigo-600 dark:text-indigo-400 font-mono font-semibold">
-                    {formatMoney(apuracaoValues.comissao)}
-                  </span>
-                  <span className="w-14 text-right text-indigo-600 dark:text-indigo-400 font-mono">
-                    {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.comissao / apuracaoValues.fat) * 100) : "0,0%"}
-                  </span>
-                </div>
-              </div>
-
-              {/* 12. Distribuição do lucro */}
-              <div className="flex items-center justify-between p-3 bg-emerald-500/15 font-bold text-sm border-t-2 border-emerald-500/30">
-                <div className="flex flex-col">
-                  <span className="font-sans text-emerald-700 dark:text-emerald-400">(=) Distribuição do lucro</span>
-                  <span className="text-[10px] text-muted-foreground font-normal font-sans">Resultado pós-comissão</span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-emerald-700 dark:text-emerald-400 font-mono">{formatMoney(apuracaoValues.dist)}</span>
-                  <span className="w-14 text-right text-emerald-700 dark:text-emerald-400 font-mono">
-                    {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.dist / apuracaoValues.fat) * 100) : "0,0%"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </div>
+          </div>
+          <div
+            className={cn(
+              "text-2xl font-bold font-mono mt-2",
+              apuracaoValues.dist >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+            )}
+          >
+            {formatMoney(apuracaoValues.dist)}
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1 gap-1 flex-wrap">
+            <span className="text-muted-foreground truncate">
+              Comissão:{" "}
+              <strong className="text-indigo-600 dark:text-indigo-400 font-mono font-semibold">
+                {formatMoney(apuracaoValues.comissao)}
+              </strong>
+            </span>
+            <span>
+              Retorno:{" "}
+              <strong className={cn("font-mono", apuracaoValues.dist >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
+                {apuracaoValues.fat > 0 ? formatPercent((apuracaoValues.dist / apuracaoValues.fat) * 100) : "0.0%"}
+              </strong>
+            </span>
+          </div>
+        </Card>
       </div>
+
+      {/* --- GRÁFICO DE EVOLUÇÃO MENSAL (LARGURA TOTAL) --- */}
+      <Card className="p-5 rounded-2xl border border-border bg-card shadow-sm space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <BarChart3 className="h-4 w-4 text-primary" /> Evolução Mensal da DRE (Faturamento vs Margem vs Despesas)
+            </span>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Trajetória consolidada: <span className="font-medium text-foreground">{selectedScopeLabel}</span>
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground font-mono bg-muted/50 px-2.5 py-1 rounded-md border border-border">
+              {hasMonthFilter ? `${activeMonthLabel} • ${yearLabel}` : `12 Meses • ${yearLabel}`}
+            </span>
+          </div>
+        </div>
+        <div className="h-56 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={evolutionChartData} margin={{ top: 10, right: 15, left: -10, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gradFat" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gradMargem" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gradDesp" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.08} vertical={false} />
+              <XAxis dataKey="label" stroke="currentColor" opacity={0.5} fontSize={11} tickLine={false} />
+              <YAxis stroke="currentColor" opacity={0.5} fontSize={11} tickLine={false} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
+              <Tooltip
+                contentStyle={{ backgroundColor: "var(--card)", borderColor: "var(--border)", color: "var(--card-foreground)", borderRadius: "8px", fontSize: "11px" }}
+                formatter={(val: number) => [formatMoney(val), ""]}
+              />
+              <Legend iconType="circle" wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
+              <Area type="monotone" dataKey="faturamento" name="Faturamento" stroke="#10b981" fillOpacity={1} fill="url(#gradFat)" strokeWidth={2} />
+              <Area type="monotone" dataKey="margemContrib" name="Margem Contrib." stroke="#06b6d4" fillOpacity={1} fill="url(#gradMargem)" strokeWidth={1.5} />
+              <Area type="monotone" dataKey="despesas" name="Total Despesas" stroke="#ef4444" fillOpacity={1} fill="url(#gradDesp)" strokeWidth={1.5} />
+              <Area type="monotone" dataKey="distribuicao" name="Distribuição Lucro" stroke="#6366f1" strokeWidth={2} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
 
       {/* --- SEÇÃO PRINCIPAL: TABELA MATRICIAL COMPLETA DA DRE GERENCIAL (12 MESES) --- */}
       <Card className="p-6 rounded-2xl border border-border bg-card shadow-sm space-y-4">
