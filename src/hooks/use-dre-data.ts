@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/external";
-import type { DreRow, FaturamentoRow, ParceiroRegra, Servidor, Subloja } from "@/lib/dre";
+import type { DreRow, FaturamentoRow, ParceiroRegra, ReceberRow, Servidor, Subloja } from "@/lib/dre";
 
 /**
- * Consultas base da DRE Gerencial (lojas, filiais, faturamento, lançamentos e
- * regras de parceiro). As chaves de query são as mesmas usadas nas demais
- * telas, então o cache é compartilhado entre Visão Geral, DRE e Apuração.
+ * Consultas base da DRE Gerencial (lojas, filiais, faturamento, receitas a receber,
+ * lançamentos de despesas e regras de parceiro). As chaves de query são as mesmas
+ * usadas nas demais telas, então o cache é compartilhado entre Visão Geral, DRE e Apuração.
  */
 export function useDreData() {
   const servidoresQ = useQuery({
@@ -36,6 +36,15 @@ export function useDreData() {
     },
   });
 
+  const receberQ = useQuery({
+    queryKey: ["receber-all"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("grupo_r3_receber_detalhado" as never).select("*");
+      if (error) throw error;
+      return (data ?? []) as ReceberRow[];
+    },
+  });
+
   const dreQ = useQuery({
     queryKey: ["dre-all"],
     queryFn: async () => {
@@ -58,10 +67,10 @@ export function useDreData() {
   });
 
   const isLoading =
-    servidoresQ.isLoading || sublojasQ.isLoading || faturamentoQ.isLoading || dreQ.isLoading || regrasQ.isLoading;
+    servidoresQ.isLoading || sublojasQ.isLoading || faturamentoQ.isLoading || receberQ.isLoading || dreQ.isLoading || regrasQ.isLoading;
   const isFetching =
-    servidoresQ.isFetching || sublojasQ.isFetching || faturamentoQ.isFetching || dreQ.isFetching || regrasQ.isFetching;
-  const error = servidoresQ.error || sublojasQ.error || faturamentoQ.error || dreQ.error || regrasQ.error;
+    servidoresQ.isFetching || sublojasQ.isFetching || faturamentoQ.isFetching || receberQ.isFetching || dreQ.isFetching || regrasQ.isFetching;
+  const error = servidoresQ.error || sublojasQ.error || faturamentoQ.error || receberQ.error || dreQ.error || regrasQ.error;
 
   // Lojas e filiais ativas (conforme Configurações)
   const activeServidores = useMemo(
@@ -85,6 +94,7 @@ export function useDreData() {
     servidoresQ.refetch();
     sublojasQ.refetch();
     faturamentoQ.refetch();
+    receberQ.refetch();
     dreQ.refetch();
     regrasQ.refetch();
   };
@@ -93,6 +103,7 @@ export function useDreData() {
     servidores: servidoresQ.data ?? [],
     sublojas: sublojasQ.data ?? [],
     faturamento: faturamentoQ.data ?? [],
+    receber: receberQ.data ?? [],
     dre: dreQ.data ?? [],
     regras: regrasQ.data ?? [],
     activeServidores,

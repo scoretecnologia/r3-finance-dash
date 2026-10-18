@@ -264,7 +264,7 @@ export function TriggerSyncDialog({
                 )}
               >
                 <span>Carga Full</span>
-                <span className="text-[10px] opacity-70">Desde 2025</span>
+                <span className="text-[10px] opacity-70">Desde 2026</span>
               </button>
             </div>
           </div>
@@ -285,7 +285,7 @@ export function TriggerSyncDialog({
             <div className="flex items-start gap-2.5 p-3 rounded-xl bg-chart-amber/10 border border-chart-amber/20 text-xs text-chart-amber animate-fade-in">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
               <span>
-                A <strong>Carga Completa</strong> processará todo o histórico mês a mês a partir de janeiro de 2025. Esse processo pode levar alguns minutos no Kestra.
+                A <strong>Carga Completa</strong> processará todo o histórico mês a mês a partir de janeiro de 2026. Esse processo pode levar alguns minutos no Kestra.
               </span>
             </div>
           )}

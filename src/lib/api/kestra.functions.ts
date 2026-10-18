@@ -218,7 +218,7 @@ export const getKestraExecutions = createServerFn({ method: "GET" }).handler(
       // Nome do fluxo
       let fluxoLabel = "Sincronização Manual (Mês Atual)";
       if (cargaCompleta) {
-        fluxoLabel = "Carga Completa (desde 2025)";
+        fluxoLabel = "Carga Completa (desde 2026)";
       } else if (mesRef) {
         fluxoLabel = `Retroativo (${mesRef})`;
       } else if (exec.trigger?.id === "schedule") {

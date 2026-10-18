@@ -279,6 +279,15 @@ function DashboardPage() {
     },
   });
 
+  const receberQ = useQuery({
+    queryKey: ["receber-all"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("grupo_r3_receber_detalhado" as never).select("*");
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
   const dreQ = useQuery({
     queryKey: ["dre-all"],
     queryFn: async () => {
@@ -312,6 +321,7 @@ function DashboardPage() {
 
   const isLoading =
     faturamentoQ.isLoading ||
+    receberQ.isLoading ||
     dreQ.isLoading ||
     parceirosRegrasQ.isLoading ||
     servidoresQ.isLoading ||
@@ -350,6 +360,12 @@ function DashboardPage() {
       const y = extractYearStr(item.mes_inicio);
       if (y) setY.add(y);
     });
+    (receberQ.data ?? []).forEach((item) => {
+      if (item.id_servidor && !activeServidorIds.has(Number(item.id_servidor))) return;
+      if (item.id_cidade && !activeSublojaIds.has(Number(item.id_cidade))) return;
+      const y = extractYearStr(item.mes_inicio);
+      if (y) setY.add(y);
+    });
     (dreQ.data ?? []).forEach((item) => {
       if (item.id_servidor && !activeServidorIds.has(Number(item.id_servidor))) return;
       if (item.id_cidade && !activeSublojaIds.has(Number(item.id_cidade))) return;
@@ -358,7 +374,7 @@ function DashboardPage() {
     });
     const list = Array.from(setY).sort().reverse();
     return list.length > 0 ? list : ["2026", "2025"];
-  }, [faturamentoQ.data, dreQ.data, activeServidorIds, activeSublojaIds]);
+  }, [faturamentoQ.data, receberQ.data, dreQ.data, activeServidorIds, activeSublojaIds]);
 
   // Filtros Globais
   const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
@@ -402,7 +418,7 @@ function DashboardPage() {
   };
 
   const expandAllGroups = () => {
-    setExpandedGroups(new Set(MANAGERIAL_GROUPS.map((g) => g.id)));
+    setExpandedGroups(new Set([...MANAGERIAL_GROUPS.map((g) => g.id), "receita_gerada"]));
   };
 
   const collapseAllGroups = () => {
@@ -533,6 +549,38 @@ function DashboardPage() {
     return list;
   }, [dreQ.data, activeServidorIds, activeSublojaIds, selectedYear, selectedMonths, selectedServidores, selectedCidades]);
 
+  const filteredReceberData = useMemo(() => {
+    let list = receberQ.data ?? [];
+
+    // Ignora dados de lojas/servidores ou sublojas inativas nas configurações
+    list = list.filter((item) => {
+      if (item.id_servidor && !activeServidorIds.has(Number(item.id_servidor))) {
+        return false;
+      }
+      if (item.id_cidade && !activeSublojaIds.has(Number(item.id_cidade))) {
+        return false;
+      }
+      return true;
+    });
+
+    if (selectedYear !== "todos") {
+      list = list.filter((item) => extractYearStr(item.mes_inicio) === selectedYear);
+    }
+    if (selectedMonths.length > 0) {
+      const months = new Set(selectedMonths);
+      list = list.filter((item) => months.has(extractMonthStr(item.mes_inicio) ?? ""));
+    }
+    if (selectedServidores.length > 0) {
+      const set = new Set(selectedServidores);
+      list = list.filter((item) => set.has(String(item.id_servidor)));
+    }
+    if (selectedCidades.length > 0) {
+      const set = new Set(selectedCidades);
+      list = list.filter((item) => set.has(String(item.id_cidade)));
+    }
+    return list;
+  }, [receberQ.data, activeServidorIds, activeSublojaIds, selectedYear, selectedMonths, selectedServidores, selectedCidades]);
+
   // --- MAPEAMENTO MATRICIAL MENSAL (12 MESES: JAN a DEZ) ---
   // 1. Faturamento por Mês
   const faturamentoMensal = useMemo(() => {
@@ -550,6 +598,74 @@ function DashboardPage() {
   const faturamentoTotalAno = useMemo(() => {
     return Object.values(faturamentoMensal).reduce((a, b) => a + b, 0);
   }, [faturamentoMensal]);
+
+  // 1.1 Receita Gerada (grupo_r3_receber_detalhado) - Total Mensal e Contas
+  const receitaData = useMemo(() => {
+    const monthly: Record<string, number> = {};
+    MONTH_KEYS.forEach((m) => (monthly[m] = 0));
+    let total = 0;
+
+    const accountsMap = new Map<
+      string,
+      {
+        name: string;
+        sampleCode: string;
+        categoria?: string;
+        natureza: string;
+        monthly: Record<string, number>;
+        total: number;
+      }
+    >();
+
+    filteredReceberData.forEach((item) => {
+      const accName = item.conta_padronizada || item.descricao_conta || "Outras Receitas";
+      const m = extractMonthStr(item.mes_inicio);
+      const val = Number(item.valor_liquido) || Number(item.credito) || 0;
+
+      if (m && monthly[m] !== undefined) {
+        monthly[m] += val;
+      }
+      total += val;
+
+      if (!accountsMap.has(accName)) {
+        const accM: Record<string, number> = {};
+        MONTH_KEYS.forEach((k) => (accM[k] = 0));
+        accountsMap.set(accName, {
+          name: accName,
+          sampleCode: item.codigo_conta || "",
+          categoria: item.categoria || "",
+          natureza: item.natureza || "Receita",
+          monthly: accM,
+          total: 0,
+        });
+      }
+
+      const accObj = accountsMap.get(accName)!;
+      if (m && accObj.monthly[m] !== undefined) {
+        accObj.monthly[m] += val;
+      }
+      accObj.total += val;
+      if (!accObj.sampleCode && item.codigo_conta) accObj.sampleCode = item.codigo_conta;
+      if (!accObj.categoria && item.categoria) accObj.categoria = item.categoria;
+    });
+
+    const allAccounts = Array.from(accountsMap.values()).sort((a, b) => b.total - a.total);
+
+    const filteredAccounts = dreSearch.trim()
+      ? allAccounts.filter(
+          (acc) =>
+            acc.name.toLowerCase().includes(dreSearch.toLowerCase()) ||
+            acc.sampleCode.toLowerCase().includes(dreSearch.toLowerCase()) ||
+            (acc.categoria && acc.categoria.toLowerCase().includes(dreSearch.toLowerCase()))
+        )
+      : allAccounts;
+
+    return {
+      monthly,
+      total,
+      accounts: filteredAccounts,
+    };
+  }, [filteredReceberData, dreSearch]);
 
   // 2. Agrupamento Gerencial da DRE por Grupo e Conta Padronizada
   const dreGroupsData = useMemo(() => {
@@ -889,11 +1005,19 @@ function DashboardPage() {
   const handleCellClick = (accName: string, sampleCode: string, groupName: string, monthKey: string) => {
     const monthLabel = MONTH_LABELS.find((m) => m.key === monthKey)?.full || monthKey;
 
-    const records = filteredDreData.filter((item) => {
+    let records = filteredDreData.filter((item) => {
       const matchAcc = (item.conta_padronizada || item.descricao_conta) === accName;
       const matchMonth = extractMonthStr(item.mes_inicio) === monthKey;
       return matchAcc && matchMonth;
     });
+
+    if (records.length === 0) {
+      records = filteredReceberData.filter((item) => {
+        const matchAcc = (item.conta_padronizada || item.descricao_conta) === accName;
+        const matchMonth = extractMonthStr(item.mes_inicio) === monthKey;
+        return matchAcc && matchMonth;
+      });
+    }
 
     setSelectedCellDetail({
       accountCode: sampleCode || records[0]?.codigo_conta || "—",
@@ -920,6 +1044,27 @@ function DashboardPage() {
     fatRow[totalColumnLabel] = faturamentoTotalAno;
     fatRow["% Faturamento"] = "100.0%";
     rows.push(fatRow);
+
+    // Receita Gerada (grupo_r3_receber_detalhado)
+    const recRow: Record<string, unknown> = {
+      "Grupo DRE": "(+) Receita Gerada",
+      "Conta Padronizada": "RECEITA GERADA (CONTAS A RECEBER)",
+    };
+    visibleMonthLabels.forEach((ml) => (recRow[ml.short] = receitaData.monthly[ml.key]));
+    recRow[totalColumnLabel] = receitaData.total;
+    recRow["% Faturamento"] = faturamentoTotalAno > 0 ? formatPercent((receitaData.total / faturamentoTotalAno) * 100) : "0.0%";
+    rows.push(recRow);
+
+    receitaData.accounts.forEach((acc) => {
+      const accRow: Record<string, unknown> = {
+        "Grupo DRE": "(+) Receita Gerada",
+        "Conta Padronizada": `${acc.sampleCode ? `[${acc.sampleCode}] ` : ""}${acc.name}${acc.categoria ? ` (${acc.categoria})` : ""}`,
+      };
+      visibleMonthLabels.forEach((ml) => (accRow[ml.short] = acc.monthly[ml.key]));
+      accRow[totalColumnLabel] = acc.total;
+      accRow["% Faturamento"] = faturamentoTotalAno > 0 ? formatPercent((acc.total / faturamentoTotalAno) * 100) : "0.0%";
+      rows.push(accRow);
+    });
 
     // Grupos e Contas
     dreGroupsData.forEach((group) => {
@@ -1226,6 +1371,114 @@ function DashboardPage() {
                 </td>
               </tr>
 
+              {/* ═══════════════════════════════════════════════════════════════════ */}
+              {/* 1.1 (+) RECEITA GERADA (RECEBER) - grupo_r3_receber_detalhado       */}
+              {/* ═══════════════════════════════════════════════════════════════════ */}
+              <tr
+                onClick={() => toggleGroup("receita_gerada")}
+                className="bg-emerald-500/10 hover:bg-emerald-500/15 cursor-pointer font-bold text-xs transition-colors border-b border-border"
+              >
+                <td className="py-3 px-4 font-sans text-emerald-600 dark:text-emerald-400 min-w-[300px] max-w-[300px] sticky left-0 bg-card z-20 border-r border-border shadow-md">
+                  <div className="flex items-center gap-2">
+                    {expandedGroups.has("receita_gerada") ? (
+                      <ChevronDown className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    )}
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                    <span className="truncate">(+) RECEITA GERADA</span>
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] py-0 px-1.5 rounded-md tabular-nums shrink-0 ml-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-medium"
+                    >
+                      {receitaData.accounts.length} contas
+                    </Badge>
+                  </div>
+                </td>
+                {visibleMonthKeys.map((m) => (
+                  <td key={m} className="py-3 px-3 text-right text-emerald-600 dark:text-emerald-400 font-semibold">
+                    {formatMoney(receitaData.monthly[m], true)}
+                  </td>
+                ))}
+                <td className="py-3 px-4 text-right text-emerald-600 dark:text-emerald-400 text-sm font-bold bg-emerald-500/10 border-l border-border">
+                  {formatMoney(receitaData.total)}
+                </td>
+                <td className="py-3 px-3 text-right text-emerald-700 dark:text-emerald-300 font-bold bg-muted/20 border-l border-border">
+                  {faturamentoTotalAno > 0 ? formatPercent((receitaData.total / faturamentoTotalAno) * 100) : "—"}
+                </td>
+              </tr>
+
+              {/* Linhas das Contas Padronizadas da Receita Gerada quando expandido */}
+              {expandedGroups.has("receita_gerada") && (
+                <>
+                  {receitaData.accounts.map((acc) => {
+                    const accPct = faturamentoTotalAno > 0 ? (acc.total / faturamentoTotalAno) * 100 : 0;
+                    return (
+                      <tr
+                        key={acc.name}
+                        className="bg-emerald-500/[0.03] hover:bg-emerald-500/[0.08] text-[11px] text-muted-foreground border-b border-border/40"
+                      >
+                        <td
+                          className="py-2 px-4 pl-9 font-sans truncate min-w-[300px] max-w-[300px] sticky left-0 bg-card z-20 border-r border-border shadow-md"
+                          title={`${acc.name} (cód: ${acc.sampleCode || "—"})`}
+                        >
+                          <div className="flex items-center">
+                            <span className="text-[9px] px-1 py-0.5 rounded tabular-nums font-medium mr-1.5 border shrink-0 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+                              Receita
+                            </span>
+                            {acc.sampleCode && (
+                              <span className="tabular-nums text-muted-foreground/60 mr-1.5 text-[10px]">
+                                [{acc.sampleCode}]
+                              </span>
+                            )}
+                            <span className="text-foreground/90 font-medium truncate">{acc.name}</span>
+                            {acc.categoria && (
+                              <span className="ml-1.5 text-[10px] text-muted-foreground/70 italic truncate">
+                                ({acc.categoria})
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        {visibleMonthKeys.map((m) => {
+                          const val = acc.monthly[m];
+                          const hasVal = val && Math.abs(val) > 0.01;
+                          return (
+                            <td
+                              key={m}
+                              onClick={() => {
+                                if (hasVal) handleCellClick(acc.name, acc.sampleCode, "Receitas", m);
+                              }}
+                              className={cn(
+                                "py-2 px-3 text-right tabular-nums transition-colors",
+                                hasVal
+                                  ? "cursor-pointer hover:bg-emerald-500/20 hover:text-emerald-600 underline decoration-dotted font-semibold text-foreground/90"
+                                  : "text-muted-foreground/40"
+                              )}
+                              title={hasVal ? "Clique para auditar as receitas no ERP" : undefined}
+                            >
+                              {formatMoney(val, true)}
+                            </td>
+                          );
+                        })}
+                        <td className="py-2 px-4 text-right tabular-nums font-medium text-emerald-600 dark:text-emerald-400 bg-muted/20 border-l border-border">
+                          {formatMoney(acc.total)}
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums text-muted-foreground/70 bg-muted/10 border-l border-border text-[10px]">
+                          {formatPercent(accPct)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {receitaData.accounts.length === 0 && (
+                    <tr className="bg-muted/10 text-[11px] text-muted-foreground">
+                      <td colSpan={visibleMonthKeys.length + 3} className="py-2 px-6 text-center italic">
+                        Nenhum registro de receita encontrado para os filtros selecionados.
+                      </td>
+                    </tr>
+                  )}
+                </>
+              )}
+
               {/* 2. (-) CUSTO DA MERCADORIA VENDIDA (CMV) */}
               <tr className="bg-muted/10 text-muted-foreground font-medium text-xs">
                 <td className="py-2.5 px-4 font-sans min-w-[300px] max-w-[300px] sticky left-0 bg-card z-20 border-r border-border shadow-md pl-7">
@@ -1494,10 +1747,12 @@ function DashboardPage() {
                       "Mês Referência": r.mes_inicio,
                       "Conta Padronizada": r.conta_padronizada || selectedCellDetail.accountDesc,
                       "Grupo DRE": r.grupo_dre || selectedCellDetail.category,
+                      Categoria: r.categoria || "",
                       "Descrição Original (ERP)": r.descricao_conta,
                       "Código Original (ERP)": r.codigo_conta,
                       Débito: Number(r.debito) || 0,
                       Crédito: Number(r.credito) || 0,
+                      "Valor Líquido": Number(r.valor_liquido) || Number(r.credito) || Number(r.debito) || 0,
                       Documento: r.dados_extra?.documento || r.dados_extra?.docto || "",
                       Histórico: r.dados_extra?.historico || "",
                       Empresa: r.dados_extra?.empresa || "",
@@ -1524,9 +1779,24 @@ function DashboardPage() {
                 <div className="text-lg font-bold tabular-nums text-foreground">{selectedCellDetail.records.length} lançamentos</div>
               </div>
               <div className="bg-muted/40 p-3 rounded-xl border border-border">
-                <span className="text-[10px] uppercase font-semibold text-muted-foreground">Valor Total Débito</span>
-                <div className="text-lg font-bold tabular-nums text-destructive">
-                  {formatMoney(selectedCellDetail.records.reduce((acc, curr) => acc + (Number(curr.debito) || 0), 0))}
+                <span className="text-[10px] uppercase font-semibold text-muted-foreground">
+                  {selectedCellDetail.records.some((r) => Number(r.debito) > 0) ? "Valor Total Débito" : "Valor Total Receita"}
+                </span>
+                <div
+                  className={cn(
+                    "text-lg font-bold tabular-nums",
+                    selectedCellDetail.records.some((r) => Number(r.debito) > 0)
+                      ? "text-destructive"
+                      : "text-emerald-600 dark:text-emerald-400"
+                  )}
+                >
+                  {formatMoney(
+                    selectedCellDetail.records.reduce((acc, curr) => {
+                      const deb = Number(curr.debito) || 0;
+                      const cred = Number(curr.valor_liquido || curr.credito) || 0;
+                      return acc + (deb > 0 ? deb : cred);
+                    }, 0)
+                  )}
                 </div>
               </div>
               <div className="bg-muted/40 p-3 rounded-xl border border-border">
@@ -1544,7 +1814,9 @@ function DashboardPage() {
                   <th className="py-2.5 px-3">Data</th>
                   <th className="py-2.5 px-3">Loja / Cidade</th>
                   <th className="py-2.5 px-3">Descrição Original (ERP)</th>
-                  <th className="py-2.5 px-3 text-right">Valor Débito</th>
+                  <th className="py-2.5 px-3 text-right">
+                    {selectedCellDetail?.records.some((r) => Number(r.debito) > 0) ? "Valor Débito" : "Valor Recebido"}
+                  </th>
                   <th className="py-2.5 px-3 text-center">Metadados</th>
                 </tr>
               </thead>
@@ -1568,6 +1840,9 @@ function DashboardPage() {
                     ([k]) => !ignoredKeys.has(k.toLowerCase())
                   );
 
+                  const isDebito = Number(r.debito) > 0;
+                  const itemValue = isDebito ? Number(r.debito) : Number(r.valor_liquido || r.credito || 0);
+
                   return (
                     <Fragment key={r.id}>
                       <tr className="hover:bg-muted/30 transition-colors">
@@ -1580,9 +1855,22 @@ function DashboardPage() {
                         <td className="py-2.5 px-3 font-sans text-muted-foreground" title={`Código ERP: ${r.codigo_conta || "—"}`}>
                           <span className="tabular-nums text-muted-foreground/60 mr-1.5">[{r.codigo_conta || "—"}]</span>
                           {r.descricao_conta}
+                          {r.categoria && (
+                            <Badge
+                              variant="outline"
+                              className="ml-1.5 text-[10px] py-0 px-1 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                            >
+                              {r.categoria}
+                            </Badge>
+                          )}
                         </td>
-                        <td className="py-2.5 px-3 text-right font-bold text-destructive tabular-nums">
-                          {formatMoney(Number(r.debito))}
+                        <td
+                          className={cn(
+                            "py-2.5 px-3 text-right font-bold tabular-nums",
+                            isDebito ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"
+                          )}
+                        >
+                          {formatMoney(itemValue)}
                         </td>
                         <td className="py-2.5 px-3 text-center font-sans">
                           <Button

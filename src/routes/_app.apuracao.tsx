@@ -230,6 +230,15 @@ export function ApuracaoPage() {
     },
   });
 
+  const receberQ = useQuery({
+    queryKey: ["receber-all"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("grupo_r3_receber_detalhado" as never).select("*");
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
+
   const dreQ = useQuery({
     queryKey: ["dre-all"],
     queryFn: async () => {
@@ -253,6 +262,7 @@ export function ApuracaoPage() {
 
   const isLoading =
     faturamentoQ.isLoading ||
+    receberQ.isLoading ||
     dreQ.isLoading ||
     parceirosRegrasQ.isLoading ||
     servidoresQ.isLoading ||
@@ -286,6 +296,12 @@ export function ApuracaoPage() {
   const availableYears = useMemo(() => {
     const setY = new Set<string>();
     (faturamentoQ.data ?? []).forEach((item) => {
+      if (item.id_servidor && !activeServidorIds.has(Number(item.id_servidor))) return;
+      if (item.id_cidade && !activeSublojaIds.has(Number(item.id_cidade))) return;
+      const y = extractYearStr(item.mes_inicio);
+      if (y) setY.add(y);
+    });
+    (receberQ.data ?? []).forEach((item) => {
       if (item.id_servidor && !activeServidorIds.has(Number(item.id_servidor))) return;
       if (item.id_cidade && !activeSublojaIds.has(Number(item.id_cidade))) return;
       const y = extractYearStr(item.mes_inicio);
@@ -444,6 +460,32 @@ export function ApuracaoPage() {
     return list;
   }, [dreQ.data, activeServidorIds, activeSublojaIds, selectedYear, selectedMonths, selectedServidores, selectedCidades]);
 
+  const filteredReceberData = useMemo(() => {
+    let list = receberQ.data ?? [];
+    list = list.filter((item) => {
+      if (item.id_servidor && !activeServidorIds.has(Number(item.id_servidor))) return false;
+      if (item.id_cidade && !activeSublojaIds.has(Number(item.id_cidade))) return false;
+      return true;
+    });
+
+    if (selectedYear !== "todos") {
+      list = list.filter((item) => extractYearStr(item.mes_inicio) === selectedYear);
+    }
+    if (selectedMonths.length > 0) {
+      const months = new Set(selectedMonths);
+      list = list.filter((item) => months.has(extractMonthStr(item.mes_inicio) ?? ""));
+    }
+    if (selectedServidores.length > 0) {
+      const set = new Set(selectedServidores);
+      list = list.filter((item) => set.has(String(item.id_servidor)));
+    }
+    if (selectedCidades.length > 0) {
+      const set = new Set(selectedCidades);
+      list = list.filter((item) => set.has(String(item.id_cidade)));
+    }
+    return list;
+  }, [receberQ.data, activeServidorIds, activeSublojaIds, selectedYear, selectedMonths, selectedServidores, selectedCidades]);
+
   // Faturamento
   const faturamentoMensal = useMemo(() => {
     const map: Record<string, number> = {};
@@ -460,6 +502,26 @@ export function ApuracaoPage() {
   const faturamentoTotal = useMemo(() => {
     return Object.values(faturamentoMensal).reduce((a, b) => a + b, 0);
   }, [faturamentoMensal]);
+
+  // Receita Gerada (grupo_r3_receber_detalhado)
+  const receitaTotal = useMemo(() => {
+    return filteredReceberData.reduce(
+      (acc, item) => acc + (Number(item.valor_liquido) || Number(item.credito) || 0),
+      0
+    );
+  }, [filteredReceberData]);
+
+  const receitaAccounts = useMemo(() => {
+    const map = new Map<string, number>();
+    filteredReceberData.forEach((item) => {
+      const acc = item.conta_padronizada || item.descricao_conta || "Outras Receitas";
+      const val = Number(item.valor_liquido) || Number(item.credito) || 0;
+      map.set(acc, (map.get(acc) || 0) + val);
+    });
+    return Array.from(map.entries())
+      .map(([conta, valor]) => ({ conta, valor }))
+      .sort((a, b) => b.valor - a.valor);
+  }, [filteredReceberData]);
 
   // Regras de Parceiros e Comissão
   const partnerInfo = useMemo(() => {
@@ -706,6 +768,7 @@ export function ApuracaoPage() {
 
     return {
       fat,
+      receita: receitaTotal,
       cmv,
       avarias,
       margem,
@@ -720,7 +783,7 @@ export function ApuracaoPage() {
       comissao,
       dist,
     };
-  }, [faturamentoTotal, groupTotals, partnerCommissions]);
+  }, [faturamentoTotal, receitaTotal, groupTotals, partnerCommissions]);
 
   // Evolução Mensal da Apuração (Gráfico)
   const evolutionData = useMemo(() => {
@@ -782,7 +845,13 @@ export function ApuracaoPage() {
         Linha: "(=) Faturamento",
         "Valor (R$)": apuracao.fat,
         "% Faturamento": "100.0%",
-        Classificação: "Receita Operacional",
+        Classificação: "Faturamento Bruto",
+      },
+      {
+        Linha: "(+) Receita Gerada",
+        "Valor (R$)": apuracao.receita,
+        "% Faturamento": apuracao.fat > 0 ? formatPercent((apuracao.receita / apuracao.fat) * 100) : "0.0%",
+        Classificação: "Receita Realizada (Receber)",
       },
       {
         Linha: "(-) Custo da Mercadoria Vendida (CMV)",
@@ -860,10 +929,17 @@ export function ApuracaoPage() {
 
   // Auditoria de Lançamentos
   const handleOpenAccountDetail = (accountName: string, category: string) => {
-    const records = filteredDreData.filter((item) => {
+    let records = filteredDreData.filter((item) => {
       const acc = item.conta_padronizada || item.descricao;
       return acc === accountName;
     });
+
+    if (records.length === 0) {
+      records = filteredReceberData.filter((item) => {
+        const acc = item.conta_padronizada || item.descricao_conta;
+        return acc === accountName;
+      });
+    }
 
     setSelectedCellDetail({
       accountCode: records[0]?.codigo_conta || "",
@@ -1080,9 +1156,12 @@ export function ApuracaoPage() {
           <div className="text-2xl font-bold tabular-nums text-primary mt-2">
             {formatMoney(apuracao.fat)}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1">
-            Receita total faturada no período
-          </p>
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1">
+            <span>Receita Gerada:</span>
+            <strong className="text-emerald-600 dark:text-emerald-400 tabular-nums">
+              {formatMoney(apuracao.receita)}
+            </strong>
+          </div>
         </Card>
 
         {/* KPI 2: Margem de Contribuição */}
@@ -1212,6 +1291,55 @@ export function ApuracaoPage() {
                   <span className="w-16 text-right text-primary font-bold">100,0%</span>
                 </div>
               </div>
+
+              {/* 1.1 Receita Gerada (grupo_r3_receber_detalhado) */}
+              <div className="flex items-center justify-between p-3 bg-emerald-500/10 hover:bg-emerald-500/15 transition-colors border-b border-border/50">
+                <div className="flex items-center gap-2 font-sans pl-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="text-emerald-700 dark:text-emerald-300 font-bold text-sm">(+) Receita Gerada</span>
+                  {receitaAccounts.length > 0 && (
+                    <button
+                      onClick={() => toggleSection("receita_gerada")}
+                      className="text-[10px] text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 flex items-center gap-0.5 ml-1 font-semibold"
+                    >
+                      {expandedSections.has("receita_gerada") ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                      {receitaAccounts.length} contas
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-6">
+                  <span className="text-emerald-600 dark:text-emerald-400 font-bold text-sm">{formatMoney(apuracao.receita)}</span>
+                  <span className="w-16 text-right text-emerald-700 dark:text-emerald-300 font-bold">
+                    {apuracao.fat > 0 ? formatPercent((apuracao.receita / apuracao.fat) * 100) : "—"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Subcontas de Receita Gerada */}
+              {expandedSections.has("receita_gerada") && (
+                <div className="bg-emerald-500/[0.03] pl-8 pr-4 py-2 space-y-1.5 text-[11px] border-l-2 border-emerald-500/40">
+                  {receitaAccounts.map((a) => (
+                    <div
+                      key={a.conta}
+                      onClick={() => handleOpenAccountDetail(a.conta, "Receitas")}
+                      className="flex items-center justify-between text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 cursor-pointer py-0.5"
+                    >
+                      <span className="font-sans truncate max-w-[280px]">{a.conta}</span>
+                      <div className="flex items-center gap-6">
+                        <span className="font-medium text-foreground">{formatMoney(a.valor)}</span>
+                        <span className="w-16 text-right tabular-nums text-[10px]">
+                          {apuracao.fat > 0 ? formatPercent((a.valor / apuracao.fat) * 100) : "0,0%"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {receitaAccounts.length === 0 && (
+                    <div className="text-muted-foreground/60 italic py-1 text-center">
+                      Nenhuma receita registrada no período.
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* 2. CMV */}
               <div className="flex items-center justify-between p-3 text-muted-foreground hover:bg-muted/40 transition-colors">
@@ -1654,9 +1782,20 @@ export function ApuracaoPage() {
               </span>
               <span className="font-medium text-muted-foreground">
                 Valor Total:{" "}
-                <strong className="text-destructive tabular-nums text-sm">
+                <strong
+                  className={cn(
+                    "tabular-nums text-sm font-bold",
+                    (selectedCellDetail?.records || []).some((r) => Number(r.debito) > 0)
+                      ? "text-destructive"
+                      : "text-emerald-600 dark:text-emerald-400"
+                  )}
+                >
                   {formatMoney(
-                    (selectedCellDetail?.records || []).reduce((acc, r) => acc + (Number(r.debito) || 0), 0)
+                    (selectedCellDetail?.records || []).reduce((acc, r) => {
+                      const deb = Number(r.debito) || 0;
+                      const cred = Number(r.valor_liquido || r.credito) || 0;
+                      return acc + (deb > 0 ? deb : cred);
+                    }, 0)
                   )}
                 </strong>
               </span>
@@ -1669,26 +1808,42 @@ export function ApuracaoPage() {
                     <th className="p-2.5">Data</th>
                     <th className="p-2.5">Loja / Cidade</th>
                     <th className="p-2.5">Descrição Original</th>
-                    <th className="p-2.5 text-right">Débito</th>
+                    <th className="p-2.5 text-right">
+                      {(selectedCellDetail?.records || []).some((r) => Number(r.debito) > 0) ? "Débito" : "Valor Recebido"}
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {(selectedCellDetail?.records || []).slice(0, 100).map((r, idx) => (
-                    <tr key={idx} className="hover:bg-muted/40 transition-colors">
-                      <td className="p-2.5 text-muted-foreground whitespace-nowrap tabular-nums text-[11px]">
-                        {formatDateDisplay(r.mes_inicio || r.data)}
-                      </td>
-                      <td className="p-2.5 font-medium whitespace-nowrap">
-                        {r.loja} {r.cidade && r.cidade !== "Matriz" ? `(${r.cidade})` : ""}
-                      </td>
-                      <td className="p-2.5 text-muted-foreground max-w-xs truncate" title={r.descricao}>
-                        {r.descricao || "—"}
-                      </td>
-                      <td className="p-2.5 text-right tabular-nums font-medium text-destructive whitespace-nowrap">
-                        {formatMoney(Number(r.debito) || 0)}
-                      </td>
-                    </tr>
-                  ))}
+                  {(selectedCellDetail?.records || []).slice(0, 100).map((r, idx) => {
+                    const isDeb = Number(r.debito) > 0;
+                    const val = isDeb ? Number(r.debito) : Number(r.valor_liquido || r.credito || 0);
+                    return (
+                      <tr key={idx} className="hover:bg-muted/40 transition-colors">
+                        <td className="p-2.5 text-muted-foreground whitespace-nowrap tabular-nums text-[11px]">
+                          {formatDateDisplay(r.mes_inicio || r.data)}
+                        </td>
+                        <td className="p-2.5 font-medium whitespace-nowrap">
+                          {r.loja} {r.cidade && r.cidade !== "Matriz" ? `(${r.cidade})` : ""}
+                        </td>
+                        <td className="p-2.5 text-muted-foreground max-w-xs truncate" title={r.descricao_conta || r.descricao}>
+                          {r.descricao_conta || r.descricao || "—"}
+                          {r.categoria && (
+                            <Badge variant="outline" className="ml-1 text-[9px] py-0 px-1 border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+                              {r.categoria}
+                            </Badge>
+                          )}
+                        </td>
+                        <td
+                          className={cn(
+                            "p-2.5 text-right tabular-nums font-medium whitespace-nowrap",
+                            isDeb ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"
+                          )}
+                        >
+                          {formatMoney(val)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               {(selectedCellDetail?.records || []).length > 100 && (

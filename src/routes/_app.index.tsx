@@ -47,9 +47,10 @@ function VisaoGeralPage() {
       if (y) set.add(y);
     };
     data.faturamento.forEach(add);
+    data.receber.forEach(add);
     data.dre.forEach(add);
     return Array.from(set).sort().reverse();
-  }, [data.faturamento, data.dre, data.activeServidorIds, data.activeSublojaIds]);
+  }, [data.faturamento, data.receber, data.dre, data.activeServidorIds, data.activeSublojaIds]);
 
   // Se o ano atual não tem dados, cai para o mais recente disponível
   useEffect(() => {
@@ -100,6 +101,10 @@ function VisaoGeralPage() {
     () => filterByScope(data.faturamento, scope, data.activeServidorIds, data.activeSublojaIds, { ignoreMonths: true }),
     [data.faturamento, scope, data.activeServidorIds, data.activeSublojaIds],
   );
+  const receberYear = useMemo(
+    () => filterByScope(data.receber, scope, data.activeServidorIds, data.activeSublojaIds, { ignoreMonths: true }),
+    [data.receber, scope, data.activeServidorIds, data.activeSublojaIds],
+  );
   const dreYear = useMemo(
     () => filterByScope(data.dre, scope, data.activeServidorIds, data.activeSublojaIds, { ignoreMonths: true }),
     [data.dre, scope, data.activeServidorIds, data.activeSublojaIds],
@@ -110,6 +115,10 @@ function VisaoGeralPage() {
     () => filterByScope(data.faturamento, scope, data.activeServidorIds, data.activeSublojaIds),
     [data.faturamento, scope, data.activeServidorIds, data.activeSublojaIds],
   );
+  const receberPeriod = useMemo(
+    () => filterByScope(data.receber, scope, data.activeServidorIds, data.activeSublojaIds),
+    [data.receber, scope, data.activeServidorIds, data.activeSublojaIds],
+  );
   const drePeriod = useMemo(
     () => filterByScope(data.dre, scope, data.activeServidorIds, data.activeSublojaIds),
     [data.dre, scope, data.activeServidorIds, data.activeSublojaIds],
@@ -118,18 +127,19 @@ function VisaoGeralPage() {
   const availableMonths = useMemo(() => {
     const set = new Set<string>();
     fatYear.forEach((r) => { const m = extractMonthStr(r.mes_inicio); if (m) set.add(m); });
+    receberYear.forEach((r) => { const m = extractMonthStr(r.mes_inicio); if (m) set.add(m); });
     dreYear.forEach((r) => { const m = extractMonthStr(r.mes_inicio); if (m) set.add(m); });
     return set;
-  }, [fatYear, dreYear]);
+  }, [fatYear, receberYear, dreYear]);
 
   const labelWithYear = year === "todos";
   const seriesYear = useMemo(
-    () => computeDreSeries(fatYear, dreYear, data.regras, { labelWithYear }),
-    [fatYear, dreYear, data.regras, labelWithYear],
+    () => computeDreSeries(fatYear, dreYear, data.regras, { labelWithYear }, receberYear),
+    [fatYear, dreYear, data.regras, labelWithYear, receberYear],
   );
   const seriesPeriod = useMemo(
-    () => computeDreSeries(fatPeriod, drePeriod, data.regras, { labelWithYear }),
-    [fatPeriod, drePeriod, data.regras, labelWithYear],
+    () => computeDreSeries(fatPeriod, drePeriod, data.regras, { labelWithYear }, receberPeriod),
+    [fatPeriod, drePeriod, data.regras, labelWithYear, receberPeriod],
   );
   const totals = useMemo(() => sumDreValues(seriesPeriod.map((p) => p.values)), [seriesPeriod]);
 

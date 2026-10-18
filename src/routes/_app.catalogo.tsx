@@ -17,6 +17,7 @@ import {
   Calendar,
   Layers,
   DollarSign,
+  Sparkles,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,7 +66,7 @@ function exportToXLSX(data: any[], filename: string) {
 }
 
 function CatalogoPage() {
-  const [activeTab, setActiveTab] = useState<"dre" | "faturamento">("dre");
+  const [activeTab, setActiveTab] = useState<"dre" | "receitas" | "faturamento">("dre");
   const [search, setSearch] = useState("");
   const [selectedServidor, setSelectedServidor] = useState<string>("todos");
   const [selectedCidade, setSelectedCidade] = useState<string>("todas");
@@ -111,6 +112,18 @@ function CatalogoPage() {
     },
   });
 
+  const receberQ = useQuery({
+    queryKey: ["receber-catalogo-all"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("grupo_r3_receber_detalhado" as never)
+        .select("*")
+        .order("mes_inicio", { ascending: false });
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+
   const faturamentoQ = useQuery({
     queryKey: ["faturamento-catalogo-all"],
     queryFn: async () => {
@@ -123,7 +136,7 @@ function CatalogoPage() {
     },
   });
 
-  const isLoading = dreQ.isLoading || faturamentoQ.isLoading;
+  const isLoading = dreQ.isLoading || receberQ.isLoading || faturamentoQ.isLoading;
 
   // Sublojas filtradas por matriz
   const filteredSublojas = useMemo(() => {
@@ -137,11 +150,14 @@ function CatalogoPage() {
     (dreQ.data ?? []).forEach((item) => {
       if (item.mes_inicio) setY.add(item.mes_inicio.substring(0, 4));
     });
+    (receberQ.data ?? []).forEach((item) => {
+      if (item.mes_inicio) setY.add(item.mes_inicio.substring(0, 4));
+    });
     (faturamentoQ.data ?? []).forEach((item) => {
       if (item.mes_inicio) setY.add(item.mes_inicio.substring(0, 4));
     });
     return Array.from(setY).sort().reverse();
-  }, [dreQ.data, faturamentoQ.data]);
+  }, [dreQ.data, receberQ.data, faturamentoQ.data]);
 
   // --- FILTRAGEM DRE DETALHADO ---
   const filteredDreData = useMemo(() => {
@@ -197,8 +213,42 @@ function CatalogoPage() {
     return list;
   }, [faturamentoQ.data, selectedYear, selectedServidor, selectedCidade, search]);
 
+  // --- FILTRAGEM RECEITAS DETALHADAS (grupo_r3_receber_detalhado) ---
+  const filteredReceberData = useMemo(() => {
+    let list = receberQ.data ?? [];
+
+    if (selectedYear !== "todos") {
+      list = list.filter((item) => item.mes_inicio && item.mes_inicio.startsWith(selectedYear));
+    }
+    if (selectedServidor !== "todos") {
+      list = list.filter((item) => String(item.id_servidor) === selectedServidor);
+    }
+    if (selectedCidade !== "todas") {
+      list = list.filter((item) => String(item.id_cidade) === selectedCidade);
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(
+        (item) =>
+          (item.loja && item.loja.toLowerCase().includes(q)) ||
+          (item.cidade && item.cidade.toLowerCase().includes(q)) ||
+          (item.codigo_conta && item.codigo_conta.toLowerCase().includes(q)) ||
+          (item.descricao_conta && item.descricao_conta.toLowerCase().includes(q)) ||
+          (item.conta_padronizada && item.conta_padronizada.toLowerCase().includes(q)) ||
+          (item.categoria && item.categoria.toLowerCase().includes(q))
+      );
+    }
+
+    return list;
+  }, [receberQ.data, selectedYear, selectedServidor, selectedCidade, search]);
+
   // --- PAGINAÇÃO DOS DADOS ATUAIS ---
-  const activeDataList = activeTab === "dre" ? filteredDreData : filteredFatData;
+  const activeDataList =
+    activeTab === "dre"
+      ? filteredDreData
+      : activeTab === "receitas"
+      ? filteredReceberData
+      : filteredFatData;
   const totalCount = activeDataList.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -219,12 +269,31 @@ function CatalogoPage() {
         "Mês Fim": item.mes_fim,
         "Código Conta": item.codigo_conta || "",
         "Descrição Conta": item.descricao_conta || "",
+        "Conta Padronizada": item.conta_padronizada || "",
+        "Grupo DRE": item.grupo_dre || "",
         Categoria: item.categoria || "",
         Débito: Number(item.debito) || 0,
         Crédito: Number(item.credito) || 0,
         "Valor Líquido": Number(item.valor_liquido) || 0,
       }));
       exportToXLSX(exportRows, `DRE_Detalhado_Grupo_R3_${new Date().toISOString().substring(0, 10)}`);
+    } else if (activeTab === "receitas") {
+      const exportRows = filteredReceberData.map((item) => ({
+        ID: item.id,
+        Loja: item.loja,
+        Cidade: item.cidade,
+        "Mês Início": item.mes_inicio,
+        "Mês Fim": item.mes_fim,
+        "Código Conta": item.codigo_conta || "",
+        "Descrição Conta": item.descricao_conta || "",
+        "Conta Padronizada": item.conta_padronizada || "",
+        "Grupo DRE": item.grupo_dre || "",
+        Categoria: item.categoria || "",
+        Débito: Number(item.debito) || 0,
+        Crédito: Number(item.credito) || 0,
+        "Valor Líquido": Number(item.valor_liquido) || 0,
+      }));
+      exportToXLSX(exportRows, `Receitas_Detalhadas_Grupo_R3_${new Date().toISOString().substring(0, 10)}`);
     } else {
       const exportRows = filteredFatData.map((item) => ({
         ID: item.id,
@@ -288,7 +357,7 @@ function CatalogoPage() {
       <Tabs
         value={activeTab}
         onValueChange={(val) => {
-          setActiveTab(val as "dre" | "faturamento");
+          setActiveTab(val as "dre" | "receitas" | "faturamento");
           setPage(1);
         }}
         className="w-full space-y-4"
@@ -296,10 +365,13 @@ function CatalogoPage() {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-card p-3 rounded-xl border border-border shadow-sm">
           <TabsList className="bg-muted border border-border p-1 rounded-lg">
             <TabsTrigger value="dre" className="text-xs font-semibold gap-2 px-4 py-1.5 rounded-md">
-              <Layers className="h-3.5 w-3.5" /> DRE Detalhado ({filteredDreData.length})
+              <Layers className="h-3.5 w-3.5" /> DRE / Despesas ({filteredDreData.length})
+            </TabsTrigger>
+            <TabsTrigger value="receitas" className="text-xs font-semibold gap-2 px-4 py-1.5 rounded-md text-emerald-600 dark:text-emerald-400">
+              <Sparkles className="h-3.5 w-3.5" /> Receitas ({filteredReceberData.length})
             </TabsTrigger>
             <TabsTrigger value="faturamento" className="text-xs font-semibold gap-2 px-4 py-1.5 rounded-md">
-              <DollarSign className="h-3.5 w-3.5" /> Faturamento por Loja ({filteredFatData.length})
+              <DollarSign className="h-3.5 w-3.5" /> Faturamento Lojas ({filteredFatData.length})
             </TabsTrigger>
           </TabsList>
 
@@ -447,7 +519,66 @@ function CatalogoPage() {
           </Card>
         </TabsContent>
 
-        {/* ── ABA 2: FATURAMENTO LOJA ── */}
+        {/* ── ABA 2: RECEITAS DETALHADAS ── */}
+        <TabsContent value="receitas" className="m-0">
+          <Card className="rounded-xl bg-card overflow-hidden">
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+              <table className="w-full text-xs text-left whitespace-nowrap">
+                <thead className="sticky top-0 z-20 bg-card border-b border-border text-muted-foreground font-semibold uppercase tracking-wider">
+                  <tr>
+                    <th className="py-3 px-4">Loja</th>
+                    <th className="py-3 px-4">Cidade</th>
+                    <th className="py-3 px-4">Mês Início</th>
+                    <th className="py-3 px-4">Mês Fim</th>
+                    <th className="py-3 px-4">Código Conta</th>
+                    <th className="py-3 px-4">Descrição Conta</th>
+                    <th className="py-3 px-4">Conta Padronizada</th>
+                    <th className="py-3 px-4">Categoria / Adquirente</th>
+                    <th className="py-3 px-4 text-right">Crédito</th>
+                    <th className="py-3 px-4 text-right">Valor Líquido</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border tabular-nums">
+                  {paginatedData.map((row: any) => (
+                    <tr key={row.id} className="hover:bg-muted/40 transition-colors">
+                      <td className="py-2.5 px-4 font-semibold font-sans text-foreground">{row.loja}</td>
+                      <td className="py-2.5 px-4 font-sans text-muted-foreground">{row.cidade}</td>
+                      <td className="py-2.5 px-4">{row.mes_inicio}</td>
+                      <td className="py-2.5 px-4">{row.mes_fim}</td>
+                      <td className="py-2.5 px-4 font-bold text-foreground">{row.codigo_conta || "—"}</td>
+                      <td className="py-2.5 px-4 font-sans truncate max-w-[280px]" title={row.descricao_conta}>
+                        {row.descricao_conta || "—"}
+                      </td>
+                      <td className="py-2.5 px-4 font-sans font-medium text-foreground truncate max-w-[220px]" title={row.conta_padronizada}>
+                        {row.conta_padronizada || "—"}
+                      </td>
+                      <td className="py-2.5 px-4 font-sans">
+                        <Badge variant="outline" className="text-[10px] py-0 font-sans border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                          {row.categoria || "Receita"}
+                        </Badge>
+                      </td>
+                      <td className="py-2.5 px-4 text-right text-emerald-600 dark:text-emerald-400 font-bold">
+                        {formatMoney(Number(row.credito))}
+                      </td>
+                      <td className="py-2.5 px-4 text-right text-emerald-700 dark:text-emerald-300 font-bold">
+                        {formatMoney(Number(row.valor_liquido || row.credito))}
+                      </td>
+                    </tr>
+                  ))}
+                  {paginatedData.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="py-12 text-center text-muted-foreground">
+                        Nenhum registro de Receita encontrado para os filtros selecionados.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* ── ABA 3: FATURAMENTO LOJA ── */}
         <TabsContent value="faturamento" className="m-0">
           <Card className="rounded-xl bg-card overflow-hidden">
             <div className="overflow-x-auto max-h-[600px] overflow-y-auto">

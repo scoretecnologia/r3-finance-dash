@@ -5,7 +5,7 @@ Um sistema web moderno para a gestão centralizada da extração de dados financ
 ## Funcionalidades Principais
 
 - **Gestão de Lojas e Sublojas:** Cadastre, ative ou desative lojas matrizes e suas respectivas filiais.
-- **Controle de Escopo de Extração:** Determine individualmente se cada loja deve realizar a extração do histórico completo (desde Janeiro/2025) ou de um mês específico.
+- **Controle de Escopo de Extração:** Determine individualmente se cada loja deve realizar a extração do histórico completo (desde Janeiro/2026) ou de um mês específico.
 - **Relacionamento Hierárquico:** Visualização em árvore agrupando as sublojas dentro de suas respectivas matrizes.
 - **Sincronização em Tempo Real:** Conectado diretamente ao Supabase para que a pipeline de dados em Python (no Kestra) leia as configurações instantaneamente.
 - **Autenticação Segura:** Protegido por sistema de login com níveis de acesso. Apenas usuários `admin` podem criar novas lojas/sublojas.

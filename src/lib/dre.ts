@@ -52,6 +52,27 @@ export interface DreRow {
   [key: string]: unknown;
 }
 
+export interface ReceberRow {
+  id?: number;
+  mes_inicio: string | null;
+  mes_fim?: string | null;
+  debito?: number | string | null;
+  credito?: number | string | null;
+  valor_liquido?: number | string | null;
+  grupo_dre?: string | null;
+  categoria?: string | null;
+  conta_padronizada?: string | null;
+  descricao_conta?: string | null;
+  codigo_conta?: string | null;
+  natureza?: string | null;
+  id_servidor?: number | string | null;
+  id_cidade?: number | string | null;
+  loja?: string | null;
+  cidade?: string | null;
+  dados_extra?: Record<string, unknown> | null;
+  [key: string]: unknown;
+}
+
 export interface ParceiroRegra {
   id: number;
   parceiro_nome: string;
@@ -266,6 +287,7 @@ export function filterByScope<T extends ScopeRow>(
 
 export interface DreValues {
   faturamento: number;
+  receita: number;
   cmv: number;
   avarias: number;
   /** Faturamento - CMV - Avarias */
@@ -291,7 +313,7 @@ export interface DreValues {
 
 export function emptyDreValues(): DreValues {
   return {
-    faturamento: 0, cmv: 0, avarias: 0, margem: 0,
+    faturamento: 0, receita: 0, cmv: 0, avarias: 0, margem: 0,
     adm: 0, log: 0, cartao: 0, tributos: 0, despesas: 0,
     lucro: 0, comissao: 0, distribuicao: 0,
     investimentos: 0, naoOper: 0, fixas: 0, variaveis: 0,
@@ -312,6 +334,7 @@ export function sumDreValues(list: DreValues[]): DreValues {
   const acc = emptyDreValues();
   list.forEach((v) => {
     acc.faturamento += v.faturamento;
+    acc.receita += v.receita;
     acc.cmv += v.cmv;
     acc.avarias += v.avarias;
     acc.adm += v.adm;
@@ -347,6 +370,7 @@ export function computeDreSeries(
   dre: DreRow[],
   rules: ParceiroRegra[],
   options: { labelWithYear?: boolean; fillYear?: string | null } = {},
+  receber?: ReceberRow[],
 ): DreSeriesPoint[] {
   // Agrupa por loja e mês para apurar comissão por loja
   const stores = new Map<string, { ref: StoreRef; months: Map<string, DreValues> }>();
@@ -371,6 +395,13 @@ export function computeDreSeries(
     if (!ym) return;
     const v = getStoreMonth(item, ym);
     v.faturamento += Number(item.total_faturamento) || 0;
+  });
+
+  (receber ?? []).forEach((item) => {
+    const ym = extractYearMonth(item.mes_inicio);
+    if (!ym) return;
+    const v = getStoreMonth(item, ym);
+    v.receita += Number(item.valor_liquido) || Number(item.credito) || 0;
   });
 
   dre.forEach((item) => {
