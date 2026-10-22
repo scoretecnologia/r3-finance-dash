@@ -118,7 +118,8 @@ function CatalogoPage() {
       const { data, error } = await supabase
         .from("grupo_r3_receber_detalhado" as never)
         .select("*")
-        .order("mes_inicio", { ascending: false });
+        .order("mes_inicio", { ascending: false })
+        .limit(2000);
       if (error) throw error;
       return data as any[];
     },

@@ -55,6 +55,13 @@ export interface DeparaItem {
 
 export const DRE_GROUPS_CONFIG = [
   {
+    group: "(+) Receita Gerada",
+    label: "(+) Receita Gerada",
+    ordem: 2,
+    tipo: "RECEITA",
+    badgeClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+  },
+  {
     group: "Avarias",
     label: "(-) Avarias",
     ordem: 3,
@@ -107,6 +114,11 @@ export const DRE_GROUPS_CONFIG = [
 
 export const NATUREZA_CONFIG = [
   {
+    value: "Receita",
+    label: "Receita",
+    badgeClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+  },
+  {
     value: "Despesa Fixa",
     label: "Despesa Fixa",
     badgeClass: "bg-chart-line/10 text-chart-line border-chart-line/20",
@@ -141,6 +153,7 @@ export const NATUREZA_CONFIG = [
 export function PlanoContasTab() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<"todos" | "RECEITA" | "DESPESA">("todos");
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>("todos");
   const [selectedNaturezaFilter, setSelectedNaturezaFilter] = useState<string>("todos");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<"todos" | "ativos" | "inativos">("todos");
@@ -216,14 +229,25 @@ export function PlanoContasTab() {
 
       // 2. Se solicitado, atualiza o histórico no banco de dados para refletir na hora
       if (payload.updateHistorical) {
-        await supabase
-          .from("grupo_r3_dre_detalhado" as never)
-          .update({
-            conta_padronizada: cleanPadrao,
-            grupo_dre: payload.grupo,
-            natureza: payload.natureza,
-          } as never)
-          .ilike("descricao_conta", cleanOrigem);
+        if (groupConfig.tipo === "RECEITA" || payload.grupo === "(+) Receita Gerada" || payload.natureza === "Receita") {
+          await supabase
+            .from("grupo_r3_receber_detalhado" as never)
+            .update({
+              conta_padronizada: cleanPadrao,
+              grupo_dre: payload.grupo,
+              natureza: payload.natureza || "Receita",
+            } as never)
+            .ilike("descricao_conta", cleanOrigem);
+        } else {
+          await supabase
+            .from("grupo_r3_dre_detalhado" as never)
+            .update({
+              conta_padronizada: cleanPadrao,
+              grupo_dre: payload.grupo,
+              natureza: payload.natureza,
+            } as never)
+            .ilike("descricao_conta", cleanOrigem);
+        }
       }
 
       return true;
@@ -231,6 +255,8 @@ export function PlanoContasTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["plano-contas-depara"] });
       qc.invalidateQueries({ queryKey: ["dre-all"] });
+      qc.invalidateQueries({ queryKey: ["receber-resumo"] });
+      qc.invalidateQueries({ queryKey: ["receber-all"] });
       toast.success("Plano de contas atualizado com sucesso!");
       setIsNewOpen(false);
       setEditItem(null);
@@ -289,21 +315,35 @@ export function PlanoContasTab() {
 
       let updatedCount = 0;
       for (const rule of rules) {
-        const { error } = await supabase
-          .from("grupo_r3_dre_detalhado" as never)
-          .update({
-            conta_padronizada: rule.conta_padronizada,
-            grupo_dre: rule.grupo_dre,
-            natureza: rule.natureza || "Despesa Fixa",
-          } as never)
-          .ilike("descricao_conta", rule.conta_origem);
-        if (!error) updatedCount++;
+        if (rule.tipo === "RECEITA" || rule.grupo_dre === "(+) Receita Gerada" || rule.natureza === "Receita") {
+          const { error } = await supabase
+            .from("grupo_r3_receber_detalhado" as never)
+            .update({
+              conta_padronizada: rule.conta_padronizada,
+              grupo_dre: rule.grupo_dre,
+              natureza: rule.natureza || "Receita",
+            } as never)
+            .ilike("descricao_conta", rule.conta_origem);
+          if (!error) updatedCount++;
+        } else {
+          const { error } = await supabase
+            .from("grupo_r3_dre_detalhado" as never)
+            .update({
+              conta_padronizada: rule.conta_padronizada,
+              grupo_dre: rule.grupo_dre,
+              natureza: rule.natureza || "Despesa Fixa",
+            } as never)
+            .ilike("descricao_conta", rule.conta_origem);
+          if (!error) updatedCount++;
+        }
       }
       return updatedCount;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["dre-all"] });
-      toast.success("Histórico DRE sincronizado com as regras do De-Para!");
+      qc.invalidateQueries({ queryKey: ["receber-resumo"] });
+      qc.invalidateQueries({ queryKey: ["receber-all"] });
+      toast.success("Histórico DRE e Receitas sincronizados com as regras do De-Para!");
     },
     onError: (err: any) => {
       toast.error(`Erro na sincronização: ${err.message}`);
@@ -313,6 +353,22 @@ export function PlanoContasTab() {
   // Filtragem
   const filteredList = useMemo(() => {
     let list = deparaQ.data ?? [];
+
+    if (selectedTypeFilter === "RECEITA") {
+      list = list.filter(
+        (item) =>
+          item.tipo === "RECEITA" ||
+          item.grupo_dre === "(+) Receita Gerada" ||
+          (item.natureza || "").includes("Receita")
+      );
+    } else if (selectedTypeFilter === "DESPESA") {
+      list = list.filter(
+        (item) =>
+          item.tipo !== "RECEITA" &&
+          item.grupo_dre !== "(+) Receita Gerada" &&
+          !(item.natureza || "").includes("Receita")
+      );
+    }
 
     if (selectedGroupFilter !== "todos") {
       list = list.filter((item) => item.grupo_dre === selectedGroupFilter);
@@ -340,16 +396,19 @@ export function PlanoContasTab() {
     }
 
     return list;
-  }, [deparaQ.data, selectedGroupFilter, selectedNaturezaFilter, selectedStatusFilter, search]);
+  }, [deparaQ.data, selectedTypeFilter, selectedGroupFilter, selectedNaturezaFilter, selectedStatusFilter, search]);
 
   // Contagens por Natureza e Grupo
   const naturezaStats = useMemo(() => {
     const data = deparaQ.data ?? [];
+    const receitas = data.filter(
+      (i) => i.tipo === "RECEITA" || i.grupo_dre === "(+) Receita Gerada" || (i.natureza || "").includes("Receita")
+    ).length;
     const fixas = data.filter((i) => (i.natureza || "").includes("Fixa")).length;
     const variaveis = data.filter((i) => (i.natureza || "").includes("Vari")).length;
     const invest = data.filter((i) => i.natureza === "Investimento").length;
     const naoOp = data.filter((i) => i.natureza === "Não Operacional").length;
-    return { fixas, variaveis, invest, naoOp, total: data.length };
+    return { receitas, fixas, variaveis, invest, naoOp, total: data.length };
   }, [deparaQ.data]);
 
   const handleOpenEdit = (item: DeparaItem) => {
@@ -366,8 +425,13 @@ export function PlanoContasTab() {
     setEditItem(null);
     setFormOrigem("");
     setFormPadrao("");
-    setFormGrupo("Despesas Administrativas");
-    setFormNatureza("Despesa Fixa");
+    if (selectedTypeFilter === "RECEITA") {
+      setFormGrupo("(+) Receita Gerada");
+      setFormNatureza("Receita");
+    } else {
+      setFormGrupo("Despesas Administrativas");
+      setFormNatureza("Despesa Fixa");
+    }
     setFormSubgrupo("");
     setFormUpdateHistorical(true);
     setIsNewOpen(true);
@@ -376,7 +440,7 @@ export function PlanoContasTab() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* ── CARDS DE RESUMO DO PLANO DE CONTAS ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <Card className="p-4 rounded-xl border border-border/50 bg-card shadow-sm">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
             Total Regras De-Para
@@ -385,6 +449,16 @@ export function PlanoContasTab() {
             {naturezaStats.total}
           </div>
           <p className="text-[11px] text-muted-foreground mt-0.5">Mapeadas das lojas</p>
+        </Card>
+
+        <Card className="p-4 rounded-xl border border-border/50 bg-card shadow-sm">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block">
+            Receitas Geradas
+          </span>
+          <div className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400 mt-1">
+            {naturezaStats.receitas}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Vendas, ajustes e bancos</p>
         </Card>
 
         <Card className="p-4 rounded-xl border border-border/50 bg-card shadow-sm">
@@ -409,18 +483,59 @@ export function PlanoContasTab() {
 
         <Card className="p-4 rounded-xl border border-border/50 bg-card shadow-sm">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
-            Invest. & Não Operacionais
+            Invest. & Outras
           </span>
           <div className="text-2xl font-bold tabular-nums text-chart-line mt-1">
             {naturezaStats.invest + naturezaStats.naoOp}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Reformas, sócios e ajustes</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Reformas e ajustes</p>
         </Card>
       </div>
 
       {/* ── BARRA DE FERRAMENTAS & FILTROS ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex flex-1 flex-wrap items-center gap-3">
+          {/* Seletor Rápido de Tipo: Todas / Receitas / DRE Despesas */}
+          <div className="flex items-center p-1 bg-muted/50 rounded-xl border border-border/50">
+            <button
+              type="button"
+              onClick={() => setSelectedTypeFilter("todos")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                selectedTypeFilter === "todos"
+                  ? "bg-card text-foreground shadow-sm font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Todas
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedTypeFilter("RECEITA")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5",
+                selectedTypeFilter === "RECEITA"
+                  ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shadow-sm font-semibold border border-emerald-500/20"
+                  : "text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400"
+              )}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              Receitas ({naturezaStats.receitas})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedTypeFilter("DESPESA")}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                selectedTypeFilter === "DESPESA"
+                  ? "bg-card text-foreground shadow-sm font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              DRE Despesas
+            </button>
+          </div>
+
           {/* Busca */}
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -493,12 +608,12 @@ export function PlanoContasTab() {
             onClick={() => syncAllHistoricalMutation.mutate()}
             disabled={syncAllHistoricalMutation.isPending}
             className="h-10 text-xs rounded-xl border-border/50 gap-1.5"
-            title="Atualiza todas as linhas de DRE no banco com as regras atuais e naturezas"
+            title="Atualiza todas as linhas de DRE e Receitas no banco com as regras atuais e naturezas"
           >
             <RefreshCw
               className={cn("h-3.5 w-3.5", syncAllHistoricalMutation.isPending && "animate-spin")}
             />
-            {syncAllHistoricalMutation.isPending ? "Sincronizando..." : "Sincronizar DRE"}
+            {syncAllHistoricalMutation.isPending ? "Sincronizando..." : "Sincronizar DRE / Receitas"}
           </Button>
 
           <Button
@@ -716,7 +831,17 @@ export function PlanoContasTab() {
               <Label className="text-xs font-medium text-foreground">
                 Grupo Gerencial da DRE
               </Label>
-              <Select value={formGrupo} onValueChange={setFormGrupo}>
+              <Select
+                value={formGrupo}
+                onValueChange={(val) => {
+                  setFormGrupo(val);
+                  if (val === "(+) Receita Gerada") {
+                    setFormNatureza("Receita");
+                  } else if (formNatureza === "Receita") {
+                    setFormNatureza("Despesa Fixa");
+                  }
+                }}
+              >
                 <SelectTrigger className="w-full h-10 rounded-xl text-xs bg-background">
                   <SelectValue placeholder="Selecione o grupo" />
                 </SelectTrigger>

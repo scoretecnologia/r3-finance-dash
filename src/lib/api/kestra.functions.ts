@@ -2,11 +2,14 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/external";
 
+export type TipoExtracao = "TODOS" | "DRE_DESPESAS" | "FATURAMENTO" | "RECEITAS";
+
 export interface TriggerSyncParams {
   servidor_id?: string;
   cidade_id?: string;
   mes_referencia?: string;
   carga_completa?: boolean;
+  tipo_extracao?: TipoExtracao;
 }
 
 export interface KestraExecution {
@@ -84,6 +87,7 @@ export const triggerKestraSync = createServerFn({ method: "POST" })
       cidade_id: z.string().optional(),
       mes_referencia: z.string().optional(),
       carga_completa: z.boolean().optional(),
+      tipo_extracao: z.enum(["TODOS", "DRE_DESPESAS", "FATURAMENTO", "RECEITAS"]).optional(),
     }),
   )
   .handler(async ({ data }) => {
@@ -91,9 +95,10 @@ export const triggerKestraSync = createServerFn({ method: "POST" })
 
     const payload = {
       servidor_id: data.servidor_id || "TODOS",
-      cidade_id: data.cidade_id || "",
-      mes_referencia: data.mes_referencia || "",
+      cidade_id: data.cidade_id ? data.cidade_id : null,
+      mes_referencia: data.mes_referencia ? data.mes_referencia : null,
       carga_completa: Boolean(data.carga_completa),
+      tipo_extracao: data.tipo_extracao || "TODOS",
     };
 
     console.log("Acionando Webhook do Kestra:", webhookUrl, payload);
@@ -200,6 +205,7 @@ export const getKestraExecutions = createServerFn({ method: "GET" }).handler(
       const cidadeId = String(inputs.cidade_id ?? triggerBody.cidade_id ?? "");
       const mesRef = String(inputs.mes_referencia ?? triggerBody.mes_referencia ?? "");
       const cargaCompleta = Boolean(inputs.carga_completa ?? triggerBody.carga_completa);
+      const tipoExtracao = String(inputs.tipo_extracao ?? triggerBody.tipo_extracao ?? "TODOS");
 
       // Nome da loja
       let lojaLabel = "Todas as Lojas Ativas";
@@ -223,6 +229,15 @@ export const getKestraExecutions = createServerFn({ method: "GET" }).handler(
         fluxoLabel = `Retroativo (${mesRef})`;
       } else if (exec.trigger?.id === "schedule") {
         fluxoLabel = "Agendamento Diário (02:00)";
+      }
+
+      if (tipoExtracao && tipoExtracao !== "TODOS") {
+        const tipoLabels: Record<string, string> = {
+          DRE_DESPESAS: "Apenas DRE Despesas",
+          FATURAMENTO: "Apenas Faturamento",
+          RECEITAS: "Apenas Receitas",
+        };
+        fluxoLabel += ` • ${tipoLabels[tipoExtracao] || tipoExtracao}`;
       }
 
       // Status amigável

@@ -28,6 +28,7 @@ import {
   Users,
   Settings,
   Percent,
+  Loader2,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -199,6 +200,7 @@ interface CellDetailState {
   monthLabel: string;
   year: string;
   records: any[];
+  isLoading?: boolean;
 }
 
 export function ApuracaoPage() {
@@ -231,9 +233,9 @@ export function ApuracaoPage() {
   });
 
   const receberQ = useQuery({
-    queryKey: ["receber-all"],
+    queryKey: ["receber-resumo"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("grupo_r3_receber_detalhado" as never).select("*");
+      const { data, error } = await supabase.rpc("grupo_r3_get_receber_resumo" as never);
       if (error) throw error;
       return (data ?? []) as any[];
     },
@@ -503,6 +505,23 @@ export function ApuracaoPage() {
     return Object.values(faturamentoMensal).reduce((a, b) => a + b, 0);
   }, [faturamentoMensal]);
 
+  // CMV Mensal e Total (grupo_r3_faturamento_loja)
+  const cmvMensal = useMemo(() => {
+    const map: Record<string, number> = {};
+    MONTH_KEYS.forEach((m) => (map[m] = 0));
+    filteredFatData.forEach((item) => {
+      const m = extractMonthStr(item.mes_inicio);
+      if (m && map[m] !== undefined) {
+        map[m] += Number(item.cmv) || 0;
+      }
+    });
+    return map;
+  }, [filteredFatData]);
+
+  const cmvTotal = useMemo(() => {
+    return Object.values(cmvMensal).reduce((a, b) => a + b, 0);
+  }, [cmvMensal]);
+
   // Receita Gerada (grupo_r3_receber_detalhado)
   const receitaTotal = useMemo(() => {
     return filteredReceberData.reduce(
@@ -672,6 +691,7 @@ export function ApuracaoPage() {
       {
         storeInfo: { id_servidor: any; id_cidade: any; loja: string; cidade: string };
         fat: Record<string, number>;
+        cmv: Record<string, number>;
         avarias: Record<string, number>;
         desp: Record<string, number>;
       }
@@ -681,16 +701,19 @@ export function ApuracaoPage() {
       const key = `${idSrv || 0}__${idCid || 0}__${loja || ""}__${cid || ""}`;
       if (!storeMap.has(key)) {
         const fatInit: Record<string, number> = {};
+        const cmvInit: Record<string, number> = {};
         const avInit: Record<string, number> = {};
         const despInit: Record<string, number> = {};
         MONTH_KEYS.forEach((m) => {
           fatInit[m] = 0;
+          cmvInit[m] = 0;
           avInit[m] = 0;
           despInit[m] = 0;
         });
         storeMap.set(key, {
           storeInfo: { id_servidor: idSrv, id_cidade: idCid, loja, cidade: cid },
           fat: fatInit,
+          cmv: cmvInit,
           avarias: avInit,
           desp: despInit,
         });
@@ -703,6 +726,7 @@ export function ApuracaoPage() {
       if (m && monthlyComissao[m] !== undefined) {
         const s = getOrCreateStore(item.id_servidor, item.id_cidade, item.loja, item.cidade);
         s.fat[m] += Number(item.total_faturamento) || 0;
+        s.cmv[m] += Number(item.cmv) || 0;
       }
     });
 
@@ -727,12 +751,12 @@ export function ApuracaoPage() {
       }
     });
 
-    storeMap.forEach(({ storeInfo, fat, avarias, desp }) => {
+    storeMap.forEach(({ storeInfo, fat, cmv, avarias, desp }) => {
       const rule = getRuleForStore(storeInfo, rules);
       if (rule && Number(rule.percentual_comissao) > 0) {
         const pct = Number(rule.percentual_comissao) / 100;
         MONTH_KEYS.forEach((m) => {
-          const lucroLoja = fat[m] - avarias[m] - desp[m];
+          const lucroLoja = fat[m] - cmv[m] - avarias[m] - desp[m];
           if (lucroLoja > 0) {
             monthlyComissao[m] += lucroLoja * pct;
           }
@@ -752,7 +776,7 @@ export function ApuracaoPage() {
   // Valores Consolidados da Apuração
   const apuracao = useMemo(() => {
     const fat = faturamentoTotal;
-    const cmv = groupTotals.cmv;
+    const cmv = cmvTotal;
     const avarias = groupTotals.avarias;
     const margem = fat - cmv - avarias;
     const adm = groupTotals.adm;
@@ -783,7 +807,7 @@ export function ApuracaoPage() {
       comissao,
       dist,
     };
-  }, [faturamentoTotal, receitaTotal, groupTotals, partnerCommissions]);
+  }, [faturamentoTotal, cmvTotal, receitaTotal, groupTotals, partnerCommissions]);
 
   // Evolução Mensal da Apuração (Gráfico)
   const evolutionData = useMemo(() => {
@@ -809,7 +833,8 @@ export function ApuracaoPage() {
         }
       });
 
-      const monthMargem = monthFat - monthAvarias;
+      const monthCmv = cmvMensal[m.key] || 0;
+      const monthMargem = monthFat - monthCmv - monthAvarias;
       const monthDesp = monthAdm + monthLog + monthCartao + monthTrib;
       const monthLucro = monthMargem - monthDesp;
       const monthComissao = partnerCommissions.monthly[m.key] || 0;
@@ -819,6 +844,7 @@ export function ApuracaoPage() {
         label: m.short,
         fullLabel: m.full,
         faturamento: monthFat,
+        cmv: monthCmv,
         margem: monthMargem,
         despesas: monthDesp,
         lucro: monthLucro,
@@ -826,7 +852,7 @@ export function ApuracaoPage() {
         distribuicao: monthDist,
       };
     });
-  }, [visibleMonthLabels, faturamentoMensal, filteredDreData, partnerCommissions]);
+  }, [visibleMonthLabels, faturamentoMensal, cmvMensal, filteredDreData, partnerCommissions]);
 
   // Toggle de Seções Analíticas
   const toggleSection = (id: string) => {
@@ -928,17 +954,60 @@ export function ApuracaoPage() {
   };
 
   // Auditoria de Lançamentos
-  const handleOpenAccountDetail = (accountName: string, category: string) => {
+  const handleOpenAccountDetail = async (accountName: string, category: string) => {
     let records = filteredDreData.filter((item) => {
       const acc = item.conta_padronizada || item.descricao;
       return acc === accountName;
     });
 
-    if (records.length === 0) {
-      records = filteredReceberData.filter((item) => {
-        const acc = item.conta_padronizada || item.descricao_conta;
-        return acc === accountName;
+    if (records.length === 0 && (category.toLowerCase().includes("receita") || accountName)) {
+      setSelectedCellDetail({
+        accountCode: "",
+        accountDesc: accountName,
+        category,
+        monthKey: selectedMonths.length === 1 ? selectedMonths[0] : "all",
+        monthLabel: activeMonthLabel,
+        year: selectedYear,
+        records: [],
+        isLoading: true,
       });
+
+      try {
+        let q = supabase
+          .from("grupo_r3_receber_detalhado" as never)
+          .select("*")
+          .or(`conta_padronizada.eq."${accountName}",descricao_conta.eq."${accountName}"`);
+
+        if (selectedYear !== "todos") {
+          if (selectedMonths.length === 1) {
+            const mNum = MONTH_KEYS.indexOf(selectedMonths[0]) + 1;
+            if (mNum > 0) {
+              const mStr = String(mNum).padStart(2, "0");
+              q = q.gte("mes_inicio", `${selectedYear}-${mStr}-01`).lte("mes_inicio", `${selectedYear}-${mStr}-31`);
+            }
+          } else {
+            q = q.gte("mes_inicio", `${selectedYear}-01-01`).lte("mes_inicio", `${selectedYear}-12-31`);
+          }
+        }
+        if (selectedServidores.length > 0) {
+          q = q.in("id_servidor", selectedServidores.map(Number));
+        }
+        if (selectedCidades.length > 0) {
+          q = q.in("id_cidade", selectedCidades.map(Number));
+        }
+
+        const { data } = await q.order("created_at", { ascending: false }).limit(200);
+        setSelectedCellDetail((prev) => (prev ? {
+          ...prev,
+          accountCode: (data as any[])?.[0]?.codigo_conta || "",
+          records: (data || []) as any[],
+          isLoading: false,
+        } : null));
+      } catch (e) {
+        console.error("Erro ao buscar detalhes da receita:", e);
+        setSelectedCellDetail((prev) => (prev ? { ...prev, isLoading: false } : null));
+      }
+      return;
     }
 
     setSelectedCellDetail({
@@ -949,6 +1018,7 @@ export function ApuracaoPage() {
       monthLabel: activeMonthLabel,
       year: selectedYear,
       records,
+      isLoading: false,
     });
   };
 
@@ -1348,7 +1418,9 @@ export function ApuracaoPage() {
                 </div>
                 <div className="flex items-center gap-6">
                   <span>{formatMoney(apuracao.cmv, true)}</span>
-                  <span className="w-16 text-right">0,0%</span>
+                  <span className="w-16 text-right">
+                    {apuracao.fat > 0 ? formatPercent((apuracao.cmv / apuracao.fat) * 100) : "0,0%"}
+                  </span>
                 </div>
               </div>
 
@@ -1802,54 +1874,70 @@ export function ApuracaoPage() {
             </div>
 
             <div className="border border-border rounded-lg overflow-hidden text-xs">
-              <table className="w-full text-left">
-                <thead className="bg-muted font-semibold text-muted-foreground border-b border-border">
-                  <tr>
-                    <th className="p-2.5">Data</th>
-                    <th className="p-2.5">Loja / Cidade</th>
-                    <th className="p-2.5">Descrição Original</th>
-                    <th className="p-2.5 text-right">
-                      {(selectedCellDetail?.records || []).some((r) => Number(r.debito) > 0) ? "Débito" : "Valor Recebido"}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {(selectedCellDetail?.records || []).slice(0, 100).map((r, idx) => {
-                    const isDeb = Number(r.debito) > 0;
-                    const val = isDeb ? Number(r.debito) : Number(r.valor_liquido || r.credito || 0);
-                    return (
-                      <tr key={idx} className="hover:bg-muted/40 transition-colors">
-                        <td className="p-2.5 text-muted-foreground whitespace-nowrap tabular-nums text-[11px]">
-                          {formatDateDisplay(r.mes_inicio || r.data)}
-                        </td>
-                        <td className="p-2.5 font-medium whitespace-nowrap">
-                          {r.loja} {r.cidade && r.cidade !== "Matriz" ? `(${r.cidade})` : ""}
-                        </td>
-                        <td className="p-2.5 text-muted-foreground max-w-xs truncate" title={r.descricao_conta || r.descricao}>
-                          {r.descricao_conta || r.descricao || "—"}
-                          {r.categoria && (
-                            <Badge variant="outline" className="ml-1 text-[9px] py-0 px-1 border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
-                              {r.categoria}
-                            </Badge>
-                          )}
-                        </td>
-                        <td
-                          className={cn(
-                            "p-2.5 text-right tabular-nums font-medium whitespace-nowrap",
-                            isDeb ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"
-                          )}
-                        >
-                          {formatMoney(val)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {(selectedCellDetail?.records || []).length > 100 && (
-                <div className="p-2 text-center text-xs text-muted-foreground bg-muted/30">
-                  Mostrando os primeiros 100 registros de {selectedCellDetail?.records.length}.
+              {selectedCellDetail?.isLoading ? (
+                <div className="flex flex-col items-center justify-center py-10 gap-2 text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  <span className="text-xs">Buscando lançamentos detalhados no ERP...</span>
                 </div>
+              ) : (
+                <>
+                  <table className="w-full text-left">
+                    <thead className="bg-muted font-semibold text-muted-foreground border-b border-border">
+                      <tr>
+                        <th className="p-2.5">Data</th>
+                        <th className="p-2.5">Loja / Cidade</th>
+                        <th className="p-2.5">Descrição Original</th>
+                        <th className="p-2.5 text-right">
+                          {(selectedCellDetail?.records || []).some((r) => Number(r.debito) > 0) ? "Débito" : "Valor Recebido"}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {(selectedCellDetail?.records || []).slice(0, 100).map((r, idx) => {
+                        const isDeb = Number(r.debito) > 0;
+                        const val = isDeb ? Number(r.debito) : Number(r.valor_liquido || r.credito || 0);
+                        return (
+                          <tr key={idx} className="hover:bg-muted/40 transition-colors">
+                            <td className="p-2.5 text-muted-foreground whitespace-nowrap tabular-nums text-[11px]">
+                              {formatDateDisplay(r.mes_inicio || r.data)}
+                            </td>
+                            <td className="p-2.5 font-medium whitespace-nowrap">
+                              {r.loja} {r.cidade && r.cidade !== "Matriz" ? `(${r.cidade})` : ""}
+                            </td>
+                            <td className="p-2.5 text-muted-foreground max-w-xs truncate" title={r.descricao_conta || r.descricao}>
+                              {r.descricao_conta || r.descricao || "—"}
+                              {r.categoria && (
+                                <Badge variant="outline" className="ml-1 text-[9px] py-0 px-1 border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+                                  {r.categoria}
+                                </Badge>
+                              )}
+                            </td>
+                            <td
+                              className={cn(
+                                "p-2.5 text-right tabular-nums font-medium whitespace-nowrap",
+                                isDeb ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"
+                              )}
+                            >
+                              {formatMoney(val)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {(!selectedCellDetail?.records || selectedCellDetail.records.length === 0) && (
+                        <tr>
+                          <td colSpan={4} className="p-6 text-center text-muted-foreground">
+                            Nenhum lançamento individual encontrado para este período.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                  {(selectedCellDetail?.records || []).length > 100 && (
+                    <div className="p-2 text-center text-xs text-muted-foreground bg-muted/30">
+                      Mostrando os primeiros 100 registros de {selectedCellDetail?.records.length}.
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

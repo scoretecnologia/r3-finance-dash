@@ -15,6 +15,10 @@ import {
   CheckCircle2,
   AlertTriangle,
   Terminal,
+  Database,
+  FileText,
+  TrendingUp,
+  Receipt,
 } from "lucide-react";
 import {
   Dialog,
@@ -35,7 +39,7 @@ import {
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { triggerKestraSync } from "@/lib/api/kestra.functions";
+import { triggerKestraSync, type TipoExtracao } from "@/lib/api/kestra.functions";
 
 export interface ServidorOption {
   servidor_id: number;
@@ -57,6 +61,8 @@ interface TriggerSyncDialogProps {
   sublojas: SublojaOption[];
   initialServidorId?: number | null;
   initialCidadeId?: number | null;
+  initialCargaTipo?: "atual" | "mes" | "full";
+  initialTipoExtracao?: TipoExtracao;
 }
 
 function getCurrentMonth() {
@@ -71,10 +77,13 @@ export function TriggerSyncDialog({
   sublojas,
   initialServidorId,
   initialCidadeId,
+  initialCargaTipo,
+  initialTipoExtracao,
 }: TriggerSyncDialogProps) {
   const [selectedServidor, setSelectedServidor] = useState<string>("TODOS");
   const [selectedCidade, setSelectedCidade] = useState<string>("TODAS");
   const [cargaTipo, setCargaTipo] = useState<"atual" | "mes" | "full">("atual");
+  const [tipoExtracao, setTipoExtracao] = useState<TipoExtracao>("TODOS");
   const [mesReferencia, setMesReferencia] = useState<string>(() => getCurrentMonth());
 
   const [loading, setLoading] = useState(false);
@@ -86,6 +95,8 @@ export function TriggerSyncDialog({
     if (open) {
       setError(null);
       setSuccess(false);
+      setCargaTipo(initialCargaTipo || "atual");
+      setTipoExtracao(initialTipoExtracao || "TODOS");
       if (initialServidorId) {
         setSelectedServidor(String(initialServidorId));
         if (initialCidadeId) {
@@ -98,7 +109,7 @@ export function TriggerSyncDialog({
         setSelectedCidade("TODAS");
       }
     }
-  }, [open, initialServidorId, initialCidadeId]);
+  }, [open, initialServidorId, initialCidadeId, initialCargaTipo, initialTipoExtracao]);
 
   // Sublojas filtradas pela Matriz selecionada
   const sublojasDisponiveis = useMemo(() => {
@@ -131,6 +142,7 @@ export function TriggerSyncDialog({
           cidade_id: selectedCidade === "TODAS" ? "" : selectedCidade,
           mes_referencia: mes,
           carga_completa: isFull,
+          tipo_extracao: tipoExtracao,
         },
       });
 
@@ -219,7 +231,130 @@ export function TriggerSyncDialog({
             </div>
           )}
 
-          {/* 2. Tipo de Execução */}
+          {/* 2. Tipo de Extração / Carga */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold flex items-center gap-1.5">
+                <Database className="h-3.5 w-3.5 text-primary" /> Tipo de Extração
+              </Label>
+              <span className="text-[10px] text-muted-foreground font-medium">
+                {tipoExtracao === "TODOS"
+                  ? "Tudo (Completo)"
+                  : tipoExtracao === "DRE_DESPESAS"
+                    ? "Somente DRE Despesas"
+                    : tipoExtracao === "FATURAMENTO"
+                      ? "Somente Faturamento"
+                      : "Somente Receitas"}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setTipoExtracao("TODOS")}
+                className={cn(
+                  "p-2.5 rounded-xl border text-xs font-medium flex items-center gap-2.5 transition-all text-left",
+                  tipoExtracao === "TODOS"
+                    ? "border-primary bg-primary/10 text-primary shadow-sm"
+                    : "border-border/50 hover:border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <div
+                  className={cn(
+                    "p-1.5 rounded-lg shrink-0 transition-colors",
+                    tipoExtracao === "TODOS"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  <Database className="h-3.5 w-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold text-xs leading-none">Tudo (Completo)</div>
+                  <div className="text-[10px] opacity-70 mt-1 truncate">DRE + Fat + Receitas</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTipoExtracao("DRE_DESPESAS")}
+                className={cn(
+                  "p-2.5 rounded-xl border text-xs font-medium flex items-center gap-2.5 transition-all text-left",
+                  tipoExtracao === "DRE_DESPESAS"
+                    ? "border-primary bg-primary/10 text-primary shadow-sm"
+                    : "border-border/50 hover:border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <div
+                  className={cn(
+                    "p-1.5 rounded-lg shrink-0 transition-colors",
+                    tipoExtracao === "DRE_DESPESAS"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold text-xs leading-none">Apenas DRE Despesas</div>
+                  <div className="text-[10px] opacity-70 mt-1 truncate">Despesas e Deduções</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTipoExtracao("FATURAMENTO")}
+                className={cn(
+                  "p-2.5 rounded-xl border text-xs font-medium flex items-center gap-2.5 transition-all text-left",
+                  tipoExtracao === "FATURAMENTO"
+                    ? "border-primary bg-primary/10 text-primary shadow-sm"
+                    : "border-border/50 hover:border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <div
+                  className={cn(
+                    "p-1.5 rounded-lg shrink-0 transition-colors",
+                    tipoExtracao === "FATURAMENTO"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  <TrendingUp className="h-3.5 w-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold text-xs leading-none">Apenas Faturamento</div>
+                  <div className="text-[10px] opacity-70 mt-1 truncate">Vendas das Lojas</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTipoExtracao("RECEITAS")}
+                className={cn(
+                  "p-2.5 rounded-xl border text-xs font-medium flex items-center gap-2.5 transition-all text-left",
+                  tipoExtracao === "RECEITAS"
+                    ? "border-primary bg-primary/10 text-primary shadow-sm"
+                    : "border-border/50 hover:border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <div
+                  className={cn(
+                    "p-1.5 rounded-lg shrink-0 transition-colors",
+                    tipoExtracao === "RECEITAS"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  <Receipt className="h-3.5 w-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold text-xs leading-none">Apenas Receitas</div>
+                  <div className="text-[10px] opacity-70 mt-1 truncate">Contas a Receber</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* 3. Período da Carga */}
           <div className="space-y-2">
             <Label className="text-xs font-semibold flex items-center gap-1.5">
               <Sparkles className="h-3.5 w-3.5 text-chart-amber" /> Período da Carga
@@ -346,7 +481,7 @@ export function TriggerSyncDialog({
             ) : (
               <>
                 <Play className="h-3.5 w-3.5 fill-current" />
-                Confirmar Execução
+                {cargaTipo === "full" ? "Confirmar Carga Full" : "Confirmar Execução"}
               </>
             )}
           </Button>

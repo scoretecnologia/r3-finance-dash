@@ -37,9 +37,9 @@ export function useDreData() {
   });
 
   const receberQ = useQuery({
-    queryKey: ["receber-all"],
+    queryKey: ["receber-resumo"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("grupo_r3_receber_detalhado" as never).select("*");
+      const { data, error } = await supabase.rpc("grupo_r3_get_receber_resumo" as never);
       if (error) throw error;
       return (data ?? []) as ReceberRow[];
     },

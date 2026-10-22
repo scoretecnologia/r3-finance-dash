@@ -27,6 +27,7 @@ export interface Subloja {
 export interface FaturamentoRow {
   mes_inicio: string | null;
   total_faturamento: number | string | null;
+  cmv?: number | string | null;
   id_servidor?: number | string | null;
   id_cidade?: number | string | null;
   loja?: string | null;
@@ -395,6 +396,7 @@ export function computeDreSeries(
     if (!ym) return;
     const v = getStoreMonth(item, ym);
     v.faturamento += Number(item.total_faturamento) || 0;
+    v.cmv += Number(item.cmv) || 0;
   });
 
   (receber ?? []).forEach((item) => {

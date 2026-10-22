@@ -68,6 +68,7 @@ function ConfiguracoesPage() {
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [syncServidorId, setSyncServidorId] = useState<number | null>(null);
   const [syncCidadeId, setSyncCidadeId] = useState<number | null>(null);
+  const [syncInitialCargaTipo, setSyncInitialCargaTipo] = useState<"atual" | "mes" | "full">("atual");
   const [editTarget, setEditTarget] = useState<{
     type: "servidor" | "subloja";
     id: number;
@@ -239,6 +240,7 @@ function ConfiguracoesPage() {
               onClick={() => {
                 setSyncServidorId(null);
                 setSyncCidadeId(null);
+                setSyncInitialCargaTipo("atual");
                 setSyncDialogOpen(true);
               }}
               className="rounded-xl h-9 text-xs font-semibold bg-primary hover:bg-primary text-white shadow-md shadow-primary/20 gap-1.5 transition-all"
@@ -406,6 +408,7 @@ function ConfiguracoesPage() {
                     onExecute={() => {
                       setSyncServidorId(srv.servidor_id);
                       setSyncCidadeId(null);
+                      setSyncInitialCargaTipo(srv.carga_completa ? "full" : "mes");
                       setSyncDialogOpen(true);
                     }}
                   />
@@ -472,6 +475,7 @@ function ConfiguracoesPage() {
                             onExecute={() => {
                               setSyncServidorId(sl.servidor_id);
                               setSyncCidadeId(sl.cidade_id);
+                              setSyncInitialCargaTipo(sl.carga_completa ? "full" : "mes");
                               setSyncDialogOpen(true);
                             }}
                           />
@@ -511,6 +515,7 @@ function ConfiguracoesPage() {
         sublojas={sublojasQ.data ?? []}
         initialServidorId={syncServidorId}
         initialCidadeId={syncCidadeId}
+        initialCargaTipo={syncInitialCargaTipo}
       />
       <EditarNomeDialog
         target={editTarget}

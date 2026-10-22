@@ -17,6 +17,7 @@ import {
   FileText,
   Info,
   CheckCircle2,
+  Loader2,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -126,6 +127,7 @@ interface CellDetailState {
   monthLabel: string;
   year: string;
   records: any[];
+  isLoading?: boolean;
 }
 
 // Definição dos Grupos Gerenciais da DRE (Baseado no modelo gerencial do Grupo R3)
@@ -280,9 +282,9 @@ function DashboardPage() {
   });
 
   const receberQ = useQuery({
-    queryKey: ["receber-all"],
+    queryKey: ["receber-resumo"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("grupo_r3_receber_detalhado" as never).select("*");
+      const { data, error } = await supabase.rpc("grupo_r3_get_receber_resumo" as never);
       if (error) throw error;
       return (data ?? []) as any[];
     },
@@ -318,6 +320,31 @@ function DashboardPage() {
       }>;
     },
   });
+
+  // De-Para do plano de contas: fornece o Subgrupo de cada conta padronizada
+  const deparaQ = useQuery({
+    queryKey: ["plano-contas-depara"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("grupo_r3_plano_contas_depara" as never)
+        .select("*")
+        .order("ordem_grupo", { ascending: true })
+        .order("conta_padronizada", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as unknown as Array<{ conta_padronizada: string; subgrupo?: string | null; ativo?: boolean }>;
+    },
+  });
+
+  // conta_padronizada -> subgrupo
+  const subgrupoMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (deparaQ.data ?? []).forEach((r) => {
+      if (r.ativo === false) return;
+      const sub = (r.subgrupo || "").trim();
+      if (sub && !map.has(r.conta_padronizada)) map.set(r.conta_padronizada, sub);
+    });
+    return map;
+  }, [deparaQ.data]);
 
   const isLoading =
     faturamentoQ.isLoading ||
@@ -418,7 +445,17 @@ function DashboardPage() {
   };
 
   const expandAllGroups = () => {
-    setExpandedGroups(new Set([...MANAGERIAL_GROUPS.map((g) => g.id), "receita_gerada"]));
+    const keys = [...MANAGERIAL_GROUPS.map((g) => g.id), "receita_gerada"];
+    // Subgrupos (colapsados por padrão): a chave presente significa EXPANDIDO
+    dreGroupsData.forEach((g) =>
+      buildSubgroups(g.accounts).forEach((sg) => {
+        if (!sg.flat) keys.push(`sub:${g.id}:${sg.label}`);
+      })
+    );
+    buildSubgroups(receitaData.accounts).forEach((sg) => {
+      if (!sg.flat) keys.push(`sub:receita_gerada:${sg.label}`);
+    });
+    setExpandedGroups(new Set(keys));
   };
 
   const collapseAllGroups = () => {
@@ -611,6 +648,8 @@ function DashboardPage() {
         name: string;
         sampleCode: string;
         categoria?: string;
+        categoriasCount: number;
+        subgrupo: string;
         natureza: string;
         monthly: Record<string, number>;
         total: number;
@@ -634,10 +673,17 @@ function DashboardPage() {
           name: accName,
           sampleCode: item.codigo_conta || "",
           categoria: item.categoria || "",
+          categoriasCount: item.categoria ? 1 : 0,
+          subgrupo: subgrupoMap.get(accName) || "",
           natureza: item.natureza || "Receita",
           monthly: accM,
           total: 0,
         });
+      } else {
+        const accObj = accountsMap.get(accName)!;
+        if (item.categoria && accObj.categoria && accObj.categoria !== item.categoria) {
+          accObj.categoriasCount++;
+        }
       }
 
       const accObj = accountsMap.get(accName)!;
@@ -665,7 +711,7 @@ function DashboardPage() {
       total,
       accounts: filteredAccounts,
     };
-  }, [filteredReceberData, dreSearch]);
+  }, [filteredReceberData, dreSearch, subgrupoMap]);
 
   // 2. Agrupamento Gerencial da DRE por Grupo e Conta Padronizada
   const dreGroupsData = useMemo(() => {
@@ -682,6 +728,7 @@ function DashboardPage() {
         {
           name: string;
           sampleCode: string;
+          subgrupo: string;
           natureza: string;
           monthly: Record<string, number>;
           total: number;
@@ -708,6 +755,7 @@ function DashboardPage() {
           accountsMap.set(accName, {
             name: accName,
             sampleCode: item.codigo_conta || "",
+            subgrupo: subgrupoMap.get(accName) || "",
             natureza: item.natureza || "Despesa Fixa",
             monthly: accM,
             total: 0,
@@ -744,7 +792,7 @@ function DashboardPage() {
         accounts: filteredAccounts,
       };
     });
-  }, [filteredDreData, dreSearch, naturezaFilter]);
+  }, [filteredDreData, dreSearch, naturezaFilter, subgrupoMap]);
 
   // Lookup fácil dos totais de cada grupo por mês
   const groupTotalsMap = useMemo(() => {
@@ -760,13 +808,22 @@ function DashboardPage() {
   const avariasMonthly = groupTotalsMap["avarias"]?.monthly || {};
   const avariasTotal = groupTotalsMap["avarias"]?.total || 0;
 
-  // CMV (0,00 padrão)
-  const cmvMonthly: Record<string, number> = useMemo(() => {
-    const m: Record<string, number> = {};
-    MONTH_KEYS.forEach((k) => (m[k] = 0));
-    return m;
-  }, []);
-  const cmvTotal = 0;
+  // CMV (calculado a partir de grupo_r3_faturamento_loja)
+  const cmvMonthly = useMemo(() => {
+    const map: Record<string, number> = {};
+    MONTH_KEYS.forEach((m) => (map[m] = 0));
+    filteredFatData.forEach((item) => {
+      const m = extractMonthStr(item.mes_inicio);
+      if (m && map[m] !== undefined) {
+        map[m] += Number(item.cmv) || 0;
+      }
+    });
+    return map;
+  }, [filteredFatData]);
+
+  const cmvTotal = useMemo(() => {
+    return Object.values(cmvMonthly).reduce((a, b) => a + b, 0);
+  }, [cmvMonthly]);
 
   // (=) Margem de contribuição = Faturamento - CMV - Avarias
   const margemContribMonthly = useMemo(() => {
@@ -1002,7 +1059,7 @@ function DashboardPage() {
   const yearLabel = selectedYear === "todos" ? "Todos os Anos" : selectedYear;
 
   // Handler para abrir modal com os lançamentos originais da conta padronizada
-  const handleCellClick = (accName: string, sampleCode: string, groupName: string, monthKey: string) => {
+  const handleCellClick = async (accName: string, sampleCode: string, groupName: string, monthKey: string) => {
     const monthLabel = MONTH_LABELS.find((m) => m.key === monthKey)?.full || monthKey;
 
     let records = filteredDreData.filter((item) => {
@@ -1011,12 +1068,54 @@ function DashboardPage() {
       return matchAcc && matchMonth;
     });
 
-    if (records.length === 0) {
-      records = filteredReceberData.filter((item) => {
-        const matchAcc = (item.conta_padronizada || item.descricao_conta) === accName;
-        const matchMonth = extractMonthStr(item.mes_inicio) === monthKey;
-        return matchAcc && matchMonth;
+    if (records.length === 0 && (groupName.toLowerCase().includes("receita") || accName)) {
+      setSelectedCellDetail({
+        accountCode: sampleCode || "—",
+        accountDesc: accName,
+        category: groupName,
+        monthKey: monthKey,
+        monthLabel: monthLabel,
+        year: yearLabel,
+        records: [],
+        isLoading: true,
       });
+      setExpandedRawRowId(null);
+
+      try {
+        let q = supabase
+          .from("grupo_r3_receber_detalhado" as never)
+          .select("*")
+          .or(`conta_padronizada.eq."${accName}",descricao_conta.eq."${accName}"`);
+
+        if (selectedYear !== "todos") {
+          const mNum = MONTH_KEYS.indexOf(monthKey) + 1;
+          if (mNum > 0) {
+            const mStr = String(mNum).padStart(2, "0");
+            // Limite superior exclusivo (1º dia do mês seguinte): evita datas inválidas como 04-31
+            const nextYear = mNum === 12 ? Number(selectedYear) + 1 : Number(selectedYear);
+            const nextMonth = String(mNum === 12 ? 1 : mNum + 1).padStart(2, "0");
+            q = q.gte("mes_inicio", `${selectedYear}-${mStr}-01`).lt("mes_inicio", `${nextYear}-${nextMonth}-01`);
+          }
+        }
+        if (selectedServidores.length > 0) {
+          q = q.in("id_servidor", selectedServidores.map(Number));
+        }
+        if (selectedCidades.length > 0) {
+          q = q.in("id_cidade", selectedCidades.map(Number));
+        }
+
+        const { data } = await q.order("created_at", { ascending: false }).limit(200);
+        setSelectedCellDetail((prev) => (prev ? {
+          ...prev,
+          accountCode: sampleCode || (data as any[])?.[0]?.codigo_conta || "—",
+          records: (data || []) as any[],
+          isLoading: false,
+        } : null));
+      } catch (e) {
+        console.error("Erro ao carregar detalhes da receita:", e);
+        setSelectedCellDetail((prev) => (prev ? { ...prev, isLoading: false } : null));
+      }
+      return;
     }
 
     setSelectedCellDetail({
@@ -1027,6 +1126,7 @@ function DashboardPage() {
       monthLabel: monthLabel,
       year: yearLabel,
       records: records,
+      isLoading: false,
     });
     setExpandedRawRowId(null);
   };
@@ -1059,12 +1159,23 @@ function DashboardPage() {
       const accRow: Record<string, unknown> = {
         "Grupo DRE": "(+) Receita Gerada",
         "Conta Padronizada": `${acc.sampleCode ? `[${acc.sampleCode}] ` : ""}${acc.name}${acc.categoria ? ` (${acc.categoria})` : ""}`,
+        Subgrupo: acc.subgrupo || "",
       };
       visibleMonthLabels.forEach((ml) => (accRow[ml.short] = acc.monthly[ml.key]));
       accRow[totalColumnLabel] = acc.total;
       accRow["% Faturamento"] = faturamentoTotalAno > 0 ? formatPercent((acc.total / faturamentoTotalAno) * 100) : "0.0%";
       rows.push(accRow);
     });
+
+    // CMV
+    const cmvRow: Record<string, unknown> = {
+      "Grupo DRE": "(-) Custo da Mercadoria Vendida (CMV)",
+      "Conta Padronizada": "CUSTO DA MERCADORIA VENDIDA (CMV)",
+    };
+    visibleMonthLabels.forEach((ml) => (cmvRow[ml.short] = cmvMonthly[ml.key] || 0));
+    cmvRow[totalColumnLabel] = cmvTotal;
+    cmvRow["% Faturamento"] = faturamentoTotalAno > 0 ? formatPercent((cmvTotal / faturamentoTotalAno) * 100) : "0.0%";
+    rows.push(cmvRow);
 
     // Grupos e Contas
     dreGroupsData.forEach((group) => {
@@ -1081,12 +1192,24 @@ function DashboardPage() {
         const accRow: Record<string, unknown> = {
           "Grupo DRE": group.label,
           "Conta Padronizada": `${acc.sampleCode ? `[${acc.sampleCode}] ` : ""}${acc.name}`,
+          Subgrupo: acc.subgrupo || "",
         };
         visibleMonthLabels.forEach((ml) => (accRow[ml.short] = acc.monthly[ml.key]));
         accRow[totalColumnLabel] = acc.total;
         accRow["% Faturamento"] = faturamentoTotalAno > 0 ? formatPercent((acc.total / faturamentoTotalAno) * 100) : "0.0%";
         rows.push(accRow);
       });
+
+      if (group.id === "avarias") {
+        const margemRow: Record<string, unknown> = {
+          "Grupo DRE": "(=) Margem de Contribuição",
+          "Conta Padronizada": "MARGEM DE CONTRIBUIÇÃO",
+        };
+        visibleMonthLabels.forEach((ml) => (margemRow[ml.short] = margemContribMonthly[ml.key] || 0));
+        margemRow[totalColumnLabel] = margemContribTotal;
+        margemRow["% Faturamento"] = faturamentoTotalAno > 0 ? formatPercent((margemContribTotal / faturamentoTotalAno) * 100) : "0.0%";
+        rows.push(margemRow);
+      }
     });
 
     // Totais Finais
@@ -1411,15 +1534,56 @@ function DashboardPage() {
               {/* Linhas das Contas Padronizadas da Receita Gerada quando expandido */}
               {expandedGroups.has("receita_gerada") && (
                 <>
-                  {receitaData.accounts.map((acc) => {
+                  {buildSubgroups(receitaData.accounts).flatMap((sg) => {
+                    const subKey = `sub:receita_gerada:${sg.label}`;
+                    const subCollapsed = !sg.flat && !expandedGroups.has(subKey);
+                    const subPct = faturamentoTotalAno > 0 ? (sg.total / faturamentoTotalAno) * 100 : 0;
+                    const headerRow = sg.flat ? null : (
+                      <tr
+                        key={subKey}
+                        onClick={() => toggleGroup(subKey)}
+                        className="bg-emerald-500/[0.06] hover:bg-emerald-500/[0.12] cursor-pointer text-[11px] font-semibold border-b border-border/40"
+                      >
+                        <td className="py-2 px-4 pl-7 font-sans truncate min-w-[300px] max-w-[300px] sticky left-0 bg-card z-20 border-r border-border shadow-md">
+                          <div className="flex items-center gap-1.5">
+                            {subCollapsed ? (
+                              <ChevronRight className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            ) : (
+                              <ChevronDown className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            )}
+                            <span className="text-foreground/90 truncate">{sg.label}</span>
+                            <Badge variant="outline" className="text-[9px] py-0 px-1 rounded-md tabular-nums shrink-0 ml-1">
+                              {sg.accounts.length}
+                            </Badge>
+                          </div>
+                        </td>
+                        {visibleMonthKeys.map((m) => (
+                          <td key={m} className="py-2 px-3 text-right tabular-nums text-emerald-600 dark:text-emerald-400">
+                            {formatMoney(sg.monthly[m], true)}
+                          </td>
+                        ))}
+                        <td className="py-2 px-4 text-right tabular-nums font-semibold text-emerald-600 dark:text-emerald-400 bg-muted/20 border-l border-border">
+                          {formatMoney(sg.total)}
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums text-muted-foreground/70 bg-muted/10 border-l border-border text-[10px]">
+                          {formatPercent(subPct)}
+                        </td>
+                      </tr>
+                    );
+                    const accountRows = subCollapsed
+                      ? []
+                      : sg.accounts.map((acc) => {
                     const accPct = faturamentoTotalAno > 0 ? (acc.total / faturamentoTotalAno) * 100 : 0;
                     return (
                       <tr
-                        key={acc.name}
+                        key={`${sg.label}:${acc.name}`}
                         className="bg-emerald-500/[0.03] hover:bg-emerald-500/[0.08] text-[11px] text-muted-foreground border-b border-border/40"
                       >
                         <td
-                          className="py-2 px-4 pl-9 font-sans truncate min-w-[300px] max-w-[300px] sticky left-0 bg-card z-20 border-r border-border shadow-md"
+                          className={cn(
+                            "py-2 px-4 font-sans truncate min-w-[300px] max-w-[300px] sticky left-0 bg-card z-20 border-r border-border shadow-md",
+                            sg.flat ? "pl-9" : "pl-12"
+                          )}
                           title={`${acc.name} (cód: ${acc.sampleCode || "—"})`}
                         >
                           <div className="flex items-center">
@@ -1432,7 +1596,7 @@ function DashboardPage() {
                               </span>
                             )}
                             <span className="text-foreground/90 font-medium truncate">{acc.name}</span>
-                            {acc.categoria && (
+                            {acc.categoria && acc.categoriasCount === 1 && (
                               <span className="ml-1.5 text-[10px] text-muted-foreground/70 italic truncate">
                                 ({acc.categoria})
                               </span>
@@ -1468,6 +1632,8 @@ function DashboardPage() {
                         </td>
                       </tr>
                     );
+                  });
+                    return headerRow ? [headerRow, ...accountRows] : accountRows;
                   })}
                   {receitaData.accounts.length === 0 && (
                     <tr className="bg-muted/10 text-[11px] text-muted-foreground">
@@ -1493,7 +1659,7 @@ function DashboardPage() {
                   {formatMoney(cmvTotal, true)}
                 </td>
                 <td className="py-2.5 px-3 text-right text-muted-foreground/70 bg-muted/10 border-l border-border">
-                  0,0%
+                  {faturamentoTotalAno > 0 ? formatPercent((cmvTotal / faturamentoTotalAno) * 100) : "0,0%"}
                 </td>
               </tr>
 
@@ -1504,7 +1670,8 @@ function DashboardPage() {
                 toggleGroup,
                 faturamentoTotalAno,
                 handleCellClick,
-                visibleMonthKeys
+                visibleMonthKeys,
+                expandedGroups
               )}
 
               {/* ═══════════════════════════════════════════════════════════════════ */}
@@ -1537,7 +1704,8 @@ function DashboardPage() {
                 toggleGroup,
                 faturamentoTotalAno,
                 handleCellClick,
-                visibleMonthKeys
+                visibleMonthKeys,
+                expandedGroups
               )}
 
               {/* 6. (-) DESPESA LOGÍSTICA (Expansível) */}
@@ -1547,7 +1715,8 @@ function DashboardPage() {
                 toggleGroup,
                 faturamentoTotalAno,
                 handleCellClick,
-                visibleMonthKeys
+                visibleMonthKeys,
+                expandedGroups
               )}
 
               {/* 7. (-) TAXAS DE CARTÃO (Expansível) */}
@@ -1557,7 +1726,8 @@ function DashboardPage() {
                 toggleGroup,
                 faturamentoTotalAno,
                 handleCellClick,
-                visibleMonthKeys
+                visibleMonthKeys,
+                expandedGroups
               )}
 
               {/* 8. (-) TRIBUTOS (Expansível) */}
@@ -1567,7 +1737,8 @@ function DashboardPage() {
                 toggleGroup,
                 faturamentoTotalAno,
                 handleCellClick,
-                visibleMonthKeys
+                visibleMonthKeys,
+                expandedGroups
               )}
 
               {/* ═══════════════════════════════════════════════════════════════════ */}
@@ -1695,7 +1866,8 @@ function DashboardPage() {
                 toggleGroup,
                 faturamentoTotalAno,
                 handleCellClick,
-                visibleMonthKeys
+                visibleMonthKeys,
+                expandedGroups
               )}
 
               {renderGroupSection(
@@ -1704,7 +1876,8 @@ function DashboardPage() {
                 toggleGroup,
                 faturamentoTotalAno,
                 handleCellClick,
-                visibleMonthKeys
+                visibleMonthKeys,
+                expandedGroups
               )}
             </tbody>
           </table>
@@ -1923,7 +2096,14 @@ function DashboardPage() {
                 {(!selectedCellDetail || selectedCellDetail.records.length === 0) && (
                   <tr>
                     <td colSpan={5} className="py-8 text-center text-muted-foreground font-sans">
-                      Nenhum lançamento individual encontrado para este mês.
+                      {selectedCellDetail?.isLoading ? (
+                        <div className="flex flex-col items-center justify-center gap-2 py-4">
+                          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                          <span className="text-xs">Buscando lançamentos detalhados no ERP...</span>
+                        </div>
+                      ) : (
+                        "Nenhum lançamento individual encontrado para este mês."
+                      )}
                     </td>
                   </tr>
                 )}
@@ -1939,6 +2119,32 @@ function DashboardPage() {
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE AUXILIAR PARA RENDERIZAR CADA GRUPO GERENCIAL NA TABELA MATRICIAL
 // ─────────────────────────────────────────────────────────────────────────────
+// Agrupa as contas padronizadas por Subgrupo (nível intermediário entre grupo e conta).
+// Se nenhuma conta possui subgrupo, retorna um único bloco "flat" (sem linha de subgrupo).
+// Subgrupos ficam RECOLHIDOS por padrão; a chave `sub:<grupo>:<subgrupo>` em expandedGroups indica EXPANDIDO.
+function buildSubgroups<T extends { subgrupo?: string; monthly: Record<string, number>; total: number }>(
+  accounts: T[]
+): Array<{ label: string; monthly: Record<string, number>; total: number; accounts: T[]; flat: boolean }> {
+  if (accounts.every((a) => !a.subgrupo)) {
+    return [{ label: "", monthly: {}, total: 0, accounts, flat: true }];
+  }
+  const map = new Map<string, { label: string; monthly: Record<string, number>; total: number; accounts: T[]; flat: boolean }>();
+  accounts.forEach((acc) => {
+    const label = acc.subgrupo || "Sem subgrupo";
+    let sg = map.get(label);
+    if (!sg) {
+      sg = { label, monthly: {}, total: 0, accounts: [], flat: false };
+      map.set(label, sg);
+    }
+    sg.accounts.push(acc);
+    sg.total += acc.total;
+    Object.entries(acc.monthly).forEach(([k, v]) => {
+      sg!.monthly[k] = (sg!.monthly[k] || 0) + v;
+    });
+  });
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
+}
+
 function renderGroupSection(
   group: {
     id: string;
@@ -1950,6 +2156,7 @@ function renderGroupSection(
     accounts: Array<{
       name: string;
       sampleCode: string;
+      subgrupo?: string;
       natureza?: string;
       monthly: Record<string, number>;
       total: number;
@@ -1959,7 +2166,8 @@ function renderGroupSection(
   toggleGroup: (id: string) => void,
   faturamentoTotalAno: number,
   handleCellClick: (accName: string, sampleCode: string, groupName: string, monthKey: string) => void,
-  monthKeys: string[]
+  monthKeys: string[],
+  expandedGroups: Set<string>
 ) {
   if (!group) return null;
 
@@ -2002,14 +2210,53 @@ function renderGroupSection(
         </td>
       </tr>
 
-      {/* Linhas das Contas Padronizadas (Nível 2 - Detalhamento) */}
+      {/* Subgrupo (Nível 2) e Contas Padronizadas (Nível 3 - Detalhamento) */}
       {isExpanded &&
-        group.accounts.map((acc) => {
+        buildSubgroups(group.accounts).flatMap((sg) => {
+          const subKey = `sub:${group.id}:${sg.label}`;
+          const subCollapsed = !sg.flat && !expandedGroups.has(subKey);
+          const subPct = faturamentoTotalAno > 0 ? (sg.total / faturamentoTotalAno) * 100 : 0;
+          const headerRow = sg.flat ? null : (
+            <tr
+              key={subKey}
+              onClick={() => toggleGroup(subKey)}
+              className="bg-muted/40 hover:bg-muted/60 cursor-pointer text-[11px] font-semibold"
+            >
+              <td className="py-2 px-4 pl-7 font-sans truncate min-w-[300px] max-w-[300px] sticky left-0 bg-card z-20 border-r border-border shadow-md">
+                <div className="flex items-center gap-1.5">
+                  {subCollapsed ? (
+                    <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+                  )}
+                  <span className="text-foreground/90 truncate">{sg.label}</span>
+                  <Badge variant="outline" className="text-[9px] py-0 px-1 rounded-md tabular-nums shrink-0 ml-1">
+                    {sg.accounts.length}
+                  </Badge>
+                </div>
+              </td>
+              {monthKeys.map((m) => (
+                <td key={m} className="py-2 px-3 text-right tabular-nums text-foreground/80">
+                  {formatMoney(sg.monthly[m], true)}
+                </td>
+              ))}
+              <td className="py-2 px-4 text-right tabular-nums font-semibold text-foreground bg-muted/20 border-l border-border">
+                {formatMoney(sg.total)}
+              </td>
+              <td className="py-2 px-3 text-right tabular-nums text-muted-foreground/70 bg-muted/10 border-l border-border text-[10px]">
+                {formatPercent(subPct)}
+              </td>
+            </tr>
+          );
+          const accountRows = subCollapsed ? [] : sg.accounts.map((acc) => {
           const accPct = faturamentoTotalAno > 0 ? (acc.total / faturamentoTotalAno) * 100 : 0;
           return (
-            <tr key={acc.name} className="bg-muted/20 hover:bg-muted/40 text-[11px] text-muted-foreground">
+            <tr key={`${sg.label}:${acc.name}`} className="bg-muted/20 hover:bg-muted/40 text-[11px] text-muted-foreground">
               <td
-                className="py-2 px-4 pl-9 font-sans truncate min-w-[300px] max-w-[300px] sticky left-0 bg-card z-20 border-r border-border shadow-md"
+                className={cn(
+                  "py-2 px-4 font-sans truncate min-w-[300px] max-w-[300px] sticky left-0 bg-card z-20 border-r border-border shadow-md",
+                  sg.flat ? "pl-9" : "pl-12"
+                )}
                 title={`${acc.name} (ex: cód ${acc.sampleCode || "—"})`}
               >
                 <div className="flex items-center">
@@ -2062,6 +2309,8 @@ function renderGroupSection(
               </td>
             </tr>
           );
+          });
+          return headerRow ? [headerRow, ...accountRows] : accountRows;
         })}
     </Fragment>
   );
