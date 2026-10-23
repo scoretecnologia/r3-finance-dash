@@ -39,7 +39,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { GROUP_DEFS } from "@/lib/dre";
+import { GROUP_DEFS, normalizeGroupId } from "@/lib/dre";
 
 const groupColor = (id: string) => GROUP_DEFS.find((g) => g.id === id)?.color ?? "var(--muted-foreground)";
 
@@ -718,8 +718,7 @@ function DashboardPage() {
     return MANAGERIAL_GROUPS.map((groupDef) => {
       // Filtrar lançamentos que pertencem a este grupo gerencial
       const itemsInGroup = filteredDreData.filter((item) => {
-        const itemGroup = item.grupo_dre || "Despesas Administrativas";
-        return itemGroup === groupDef.dbGroup;
+        return normalizeGroupId(item.grupo_dre) === groupDef.id;
       });
 
       // Mapear por Conta Padronizada
@@ -953,12 +952,13 @@ function DashboardPage() {
       };
     }
 
-    // Agrupar faturamento, avarias e despesas operacionais por loja e por mês
+    // Agrupar faturamento, cmv, avarias e despesas operacionais por loja e por mês
     const storeMap = new Map<
       string,
       {
         storeInfo: { id_servidor: any; id_cidade: any; loja: string; cidade: string };
         fat: Record<string, number>;
+        cmv: Record<string, number>;
         avarias: Record<string, number>;
         desp: Record<string, number>;
       }
@@ -968,16 +968,19 @@ function DashboardPage() {
       const key = `${idSrv || 0}__${idCid || 0}__${loja || ""}__${cid || ""}`;
       if (!storeMap.has(key)) {
         const fatInit: Record<string, number> = {};
+        const cmvInit: Record<string, number> = {};
         const avInit: Record<string, number> = {};
         const despInit: Record<string, number> = {};
         MONTH_KEYS.forEach((m) => {
           fatInit[m] = 0;
+          cmvInit[m] = 0;
           avInit[m] = 0;
           despInit[m] = 0;
         });
         storeMap.set(key, {
           storeInfo: { id_servidor: idSrv, id_cidade: idCid, loja, cidade: cid },
           fat: fatInit,
+          cmv: cmvInit,
           avarias: avInit,
           desp: despInit,
         });
@@ -990,6 +993,7 @@ function DashboardPage() {
       if (m && monthlyComissao[m] !== undefined) {
         const s = getOrCreateStore(item.id_servidor, item.id_cidade, item.loja, item.cidade);
         s.fat[m] += Number(item.total_faturamento) || 0;
+        s.cmv[m] += Number(item.cmv) || 0;
       }
     });
 
@@ -998,27 +1002,27 @@ function DashboardPage() {
       if (m && monthlyComissao[m] !== undefined) {
         const s = getOrCreateStore(item.id_servidor, item.id_cidade, item.loja, item.cidade);
         const deb = Number(item.debito) || 0;
-        const group = item.grupo_dre || "Despesas Administrativas";
-        if (group === "Avarias") {
+        const gid = normalizeGroupId(item.grupo_dre);
+        if (gid === "avarias") {
           s.avarias[m] += deb;
         } else if (
-          group === "Despesas Administrativas" ||
-          group === "Despesas com Logística" ||
-          group === "Taxas de Cartão" ||
-          group === "Tributos"
+          gid === "desp_adm" ||
+          gid === "desp_log" ||
+          gid === "taxas_cartao" ||
+          gid === "tributos"
         ) {
           s.desp[m] += deb;
         }
       }
     });
 
-    storeMap.forEach(({ storeInfo, fat, avarias, desp }) => {
+    storeMap.forEach(({ storeInfo, fat, cmv, avarias, desp }) => {
       const rule = getRuleForStore(storeInfo, rules);
       if (rule && Number(rule.percentual_comissao) > 0) {
         const pct = Number(rule.percentual_comissao) / 100;
         MONTH_KEYS.forEach((m) => {
-          // Lucro Líquido da Loja naquele mês = Margem (Fat - Avarias) - Despesas
-          const lucroLoja = (fat[m] - avarias[m]) - desp[m];
+          // Lucro Líquido da Loja naquele mês = Margem (Fat - CMV - Avarias) - Despesas Operacionais
+          const lucroLoja = fat[m] - cmv[m] - avarias[m] - desp[m];
           if (lucroLoja > 0) {
             monthlyComissao[m] += lucroLoja * pct;
           }

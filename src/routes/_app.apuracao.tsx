@@ -62,6 +62,7 @@ import {
   Bar,
 } from "recharts";
 import { cn } from "@/lib/utils";
+import { normalizeGroupId } from "@/lib/dre";
 
 export const Route = createFileRoute("/_app/apuracao")({
   component: ApuracaoPage,
@@ -635,22 +636,22 @@ export function ApuracaoPage() {
 
     filteredDreData.forEach((item) => {
       const deb = Number(item.debito) || 0;
-      const group = item.grupo_dre || "Despesas Administrativas";
-      const acc = item.conta_padronizada || item.descricao || "Outros";
+      const gid = normalizeGroupId(item.grupo_dre);
+      const acc = item.conta_padronizada || item.descricao_conta || item.descricao || "Outros";
 
-      if (group === "Avarias") {
+      if (gid === "avarias") {
         avarias += deb;
         avariasAccounts.set(acc, (avariasAccounts.get(acc) || 0) + deb);
-      } else if (group === "Despesas Administrativas") {
+      } else if (gid === "desp_adm") {
         adm += deb;
         admAccounts.set(acc, (admAccounts.get(acc) || 0) + deb);
-      } else if (group === "Despesa logistica" || group === "Despesas com Logística") {
+      } else if (gid === "desp_log") {
         log += deb;
         logAccounts.set(acc, (logAccounts.get(acc) || 0) + deb);
-      } else if (group === "Taxas de cartão" || group === "Taxas de Cartão") {
+      } else if (gid === "taxas_cartao") {
         cartao += deb;
         cartaoAccounts.set(acc, (cartaoAccounts.get(acc) || 0) + deb);
-      } else if (group === "Tributos") {
+      } else if (gid === "tributos") {
         trib += deb;
         tribAccounts.set(acc, (tribAccounts.get(acc) || 0) + deb);
       }
@@ -735,16 +736,14 @@ export function ApuracaoPage() {
       if (m && monthlyComissao[m] !== undefined) {
         const s = getOrCreateStore(item.id_servidor, item.id_cidade, item.loja, item.cidade);
         const deb = Number(item.debito) || 0;
-        const group = item.grupo_dre || "Despesas Administrativas";
-        if (group === "Avarias") {
+        const gid = normalizeGroupId(item.grupo_dre);
+        if (gid === "avarias") {
           s.avarias[m] += deb;
         } else if (
-          group === "Despesas Administrativas" ||
-          group === "Despesa logistica" ||
-          group === "Despesas com Logística" ||
-          group === "Taxas de cartão" ||
-          group === "Taxas de Cartão" ||
-          group === "Tributos"
+          gid === "desp_adm" ||
+          gid === "desp_log" ||
+          gid === "taxas_cartao" ||
+          gid === "tributos"
         ) {
           s.desp[m] += deb;
         }
@@ -824,12 +823,12 @@ export function ApuracaoPage() {
       filteredDreData.forEach((item) => {
         if (extractMonthStr(item.mes_inicio) === m.key) {
           const deb = Number(item.debito) || 0;
-          const group = item.grupo_dre || "Despesas Administrativas";
-          if (group === "Avarias") monthAvarias += deb;
-          else if (group === "Despesas Administrativas") monthAdm += deb;
-          else if (group === "Despesa logistica" || group === "Despesas com Logística") monthLog += deb;
-          else if (group === "Taxas de cartão" || group === "Taxas de Cartão") monthCartao += deb;
-          else if (group === "Tributos") monthTrib += deb;
+          const gid = normalizeGroupId(item.grupo_dre);
+          if (gid === "avarias") monthAvarias += deb;
+          else if (gid === "desp_adm") monthAdm += deb;
+          else if (gid === "desp_log") monthLog += deb;
+          else if (gid === "taxas_cartao") monthCartao += deb;
+          else if (gid === "tributos") monthTrib += deb;
         }
       });
 
